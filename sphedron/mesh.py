@@ -5,8 +5,8 @@ import trimesh
 
 
 from .utils.mesh import rotate_vertices
-from .utils.mesh import cartesian_to_latlon
-from .utils.mesh import latlon_to_cartesian
+from .utils.transform import xyz_to_latlon
+from .utils.transform import latlon_to_xyz
 
 
 class Mesh:
@@ -38,7 +38,7 @@ class Mesh:
         self.vertices_sorting: npt.NDArray  # sorting of the vertices
         self.faces_subset: npt.NDArray  # indices of the faces to include in the mesh
         if not cartesian_vertices:
-            self._all_vertices = latlon_to_cartesian(vertices)
+            self._all_vertices = latlon_to_xyz(vertices)
         self.reset()
 
     def reset(self):
@@ -72,6 +72,9 @@ class Mesh:
     def triangles(self):
         return self.faces
 
+    def triangle_face(self, triangle_idx):
+        return triangle_idx
+
     @property
     def faces(self) -> npt.NDArray[np.int_]:
         return self.vertices_sorting[self._all_faces[self.faces_subset]]
@@ -82,7 +85,7 @@ class Mesh:
 
     @property
     def vertices_latlon(self):
-        return cartesian_to_latlon(self.vertices)
+        return xyz_to_latlon(self.vertices)
 
     @property
     def edges(self):
@@ -93,7 +96,9 @@ class Mesh:
             numpy.ndarray:  shape (num_edges, 2), where the connected vertices are
             (edges[i,0], edges[i,1])
         """
+        # each face is a sequence of indices, length N
         num_edges_per_face = self._all_faces.shape[1]
+        # return the pairs face[i,(i+1) % N]
         return np.concatenate(
             [
                 self.faces[:, [i, (i + 1) % num_edges_per_face]]
@@ -175,17 +180,26 @@ class Mesh:
         source_mesh: "Mesh",
         radius: float,
     ) -> npt.NDArray[np.int_]:
-        indices = spatial.cKDTree(self.vertices).query_ball_point(
+        """
+        Return the edges (i,j) where i is the index of the source mesh node s_i
+        and j the index of the current mesh node t_j such that s_i is within radius of
+        t_j.
+        """
+        current_indices = spatial.cKDTree(self.vertices).query_ball_point(
             x=source_mesh.vertices,
             r=radius,
         )
-        source_to_mesh_edges = []
-        for source_v, mesh_v in enumerate(indices):
+        source_to_current_edges = []
+        for source_v, mesh_v in enumerate(current_indices):
             for v in mesh_v:
-                source_to_mesh_edges.append((source_v, v))
-        return np.array(source_to_mesh_edges).T
+                source_to_current_edges.append((source_v, v))
+        return np.array(source_to_current_edges)
 
     def build_trimesh(self):
+        """
+        return Trimesh instance from the current vertices and faces
+
+        """
         mesh = trimesh.Trimesh(self.vertices, self.triangles)
         mesh.fix_normals()
         return mesh

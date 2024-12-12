@@ -59,131 +59,6 @@ def split_edges(edge_extremes: npt.NDArray, num_segments: int, use_angle: bool):
     return vertices_on_edges
 
 
-def cartesian_to_latlon(xyz: npt.NDArray) -> npt.NDArray:
-    """
-    Convert Cartesian coordinates on the unit sphere to longitude,latitude
-    Args:
-        xyz: Cartesian coordinates on the sphere, shape (K,3)
-    Returns:
-        latlon: array of shape (K,2)
-    """
-    # normalize just in case
-    xyz = xyz / np.linalg.norm(xyz, axis=-1, keepdims=True)
-    d2 = np.linalg.norm(xyz[:, :2], axis=1)
-    theta = np.arctan2(d2, xyz[:, 2])
-    phi = np.arctan2(xyz[:, 1], xyz[:, 0])
-    lats = 90 - np.rad2deg(theta)
-    longs = np.rad2deg(phi)
-    return np.c_[lats, longs]
-
-
-def latlon_to_cartesian(latlon: npt.NDArray) -> npt.NDArray:
-    """
-    Convert longitude,latitude to Cartesian coordinates on the unit sphere
-    Args:
-        latlon: array of shape (K,2)
-    Returns:
-        Cartesian coordinates on the sphere ,shape (K,3)
-    """
-    latlon = latlon / 180 * np.pi
-    # technically, theta = 90deg - latitude
-    cos_phi = np.cos(latlon[:, 1])
-    sin_phi = np.sin(latlon[:, 1])
-    cos_theta = np.sin(latlon[:, 0])
-    sin_theta = np.cos(latlon[:, 0])
-    return np.c_[sin_theta * cos_phi, sin_theta * sin_phi, cos_theta]
-
-
-def compute_edges_lenghts(
-    vertices: npt.NDArray,
-    edges: npt.NDArray[np.int_],
-) -> npt.NDArray:
-    """Given the vertices and the edges, compute the length of each edge
-
-    Args:
-        vertices (numpy array): shape (K,3)
-        edges (numpy array): shape (2,E)
-    Returns:
-        Lengths of the edges, shape (E,)
-    """
-    # edges: shape (2,E)
-    edges_vertices = vertices[edges]  # shape (2, E, 3)
-    edges_diff = edges_vertices[1] - edges_vertices[0]
-    edges_lengths = np.linalg.norm(edges_diff, axis=-1)  # shape (E,)
-    return edges_lengths
-
-
-def compute_edges_angles(
-    vertices: npt.NDArray,
-    faces: npt.NDArray,
-) -> npt.NDArray:
-    """
-    Calculate the angles between vertices based on the lengths of edges.
-
-    Parameters:
-    vertices (npt.NDArray): An array of vertex coordinates.
-    faces (npt.NDArray): An array of face indices that define the connectivity of vertices.
-
-    Returns:
-    npt.NDArray: An array of angles (in degrees) between vertices calculated from edge lengths.
-    """
-    edges_lengths = compute_edges_lenghts(vertices, faces)
-    angles_between_vertices = 360 * np.arcsin(edges_lengths / 2) / np.pi
-    return angles_between_vertices
-
-
-def change_grid(
-    source_latlon: npt.NDArray,
-    target_latlon: npt.NDArray,
-    n_neighbors: int = -1,
-    radius: float = -1.0,
-) -> Tuple[npt.NDArray, npt.NDArray]:
-    """
-    Transpose a grid by finding the nearest neighbors of target points
-    among the source points based on geographic coordinates.
-
-    Parameters:
-    source_latlon (npt.NDArray): An array of shape (S, 2) containing
-                                  longitude and latitude of source points.
-    target_latlon (npt.NDArray): An array of shape (T, 2) containing
-                                  longitude and latitude of target points.
-    n_neighbors (int, optional): The number of nearest neighbors to find.
-                                  Must be negative if radius is specified.
-                                  Default is -1.
-    radius (float, optional): The radius within which to search for neighbors.
-                              Must be negative if n_neighbors is specified.
-                              Default is -1.0.
-
-    Returns:
-    Tuple[npt.NDArray, npt.NDArray]: A tuple containing:
-        - nearest_indices (npt.NDArray): Indices of the nearest neighbors in
-                                          the source points, shape (T,nearest_indices)
-        - nearest_distances (npt.NDArray): Distances to the nearest neighbors,
-        shape (T,nearest_indices)
-    """
-    # either n_neighbors or radius should be used but not both
-    assert n_neighbors * radius < 0
-    if radius > 0:
-        mode = "radius"
-        n_neighbors = 5
-    else:
-        mode = "count"
-        radius = 1.0
-
-    source_vectors = latlon_to_cartesian(source_latlon)
-    target_vectors = latlon_to_cartesian(target_latlon)
-    neigh = NearestNeighbors(
-        n_neighbors=n_neighbors, metric="cosine", radius=radius
-    ).fit(source_vectors)
-
-    if mode == "count":
-        nearest_distances, nearest_indices = neigh.kneighbors(target_vectors)
-    else:
-        nearest_distances, nearest_indices = neigh.radius_neighbors(target_vectors)
-
-    return (nearest_indices, nearest_distances)
-
-
 def triangle_refine(
     vertices: npt.NDArray,
     faces: npt.NDArray,
@@ -268,8 +143,8 @@ def triangle_refine(
         AB = (edge_index[eAB] * (factor - 1) + r)[:: e_direction(eAB)]
         AC = (edge_index[eAC] * (factor - 1) + r)[:: e_direction(eAC)]
         BC = (edge_index[eBC] * (factor - 1) + r)[:: e_direction(eBC)]
-        VEF = np.r_[faces[f], AB, AC, BC, T]  # nodes in template order
-        # sort nodes in ordering
+        VEF = np.r_[faces[f], AB, AC, BC, T]  # vertices in template order
+        # sort vertices in ordering
         subfaces[f * factor**2 : (f + 1) * factor**2, :] = VEF[reordered_template]
         # Now geometry, computing positions of on face vertices.
         new_vertices[T, :] = triangle_interior(
@@ -594,7 +469,7 @@ def square_interior(AD: npt.NDArray, BC: npt.NDArray, use_length: bool = True):
     )
 
 
-def e_direction(edge: Tuple) -> Literal[-1, 1]:
+def e_direction(edge) -> Literal[-1, 1]:
     """
     Parameters
     ----------
@@ -621,3 +496,91 @@ def compute_angles_per_depth(max_depth=100):
         vertices = vertices / np.linalg.norm(vertices, axis=1, keepdims=True)
         angles.append(np.arccos(np.inner(vertices[0], vertices[1])) / np.pi * 180)
     return np.array(angles)
+
+
+def compute_edges_lenghts(
+    vertices: npt.NDArray,
+    edges: npt.NDArray[np.int_],
+) -> npt.NDArray:
+    """Given the vertices and the edges, compute the length of each edge
+
+    Args:
+        vertices (numpy array): shape (K,3)
+        edges (numpy array): shape (2,E)
+    Returns:
+        Lengths of the edges, shape (E,)
+    """
+    # edges: shape (2,E)
+    edges_vertices = vertices[edges]  # shape (2, E, 3)
+    edges_diff = edges_vertices[1] - edges_vertices[0]
+    edges_lengths = np.linalg.norm(edges_diff, axis=-1)  # shape (E,)
+    return edges_lengths
+
+
+def compute_edges_angles(
+    vertices: npt.NDArray,
+    faces: npt.NDArray,
+) -> npt.NDArray:
+    """
+    Calculate the angles between vertices based on the lengths of edges.
+
+    Parameters:
+    vertices (npt.NDArray): An array of vertex coordinates.
+    faces (npt.NDArray): An array of face indices that define the connectivity of vertices.
+
+    Returns:
+    npt.NDArray: An array of angles (in degrees) between vertices calculated from edge lengths.
+    """
+    edges_lengths = compute_edges_lenghts(vertices, faces)
+    angles_between_vertices = 360 * np.arcsin(edges_lengths / 2) / np.pi
+    return angles_between_vertices
+
+
+def change_grid(
+    source_xyz: npt.NDArray,
+    target_xyz: npt.NDArray,
+    n_neighbors: int = -1,
+    radius: float = -1.0,
+) -> Tuple[npt.NDArray, npt.NDArray]:
+    """
+    Transpose a grid by finding the nearest neighbors of target points
+    among the source points based on geographic coordinates.
+
+    Parameters:
+    source_latlon (npt.NDArray): An array of shape (S, 2) containing
+                                  longitude and latitude of source points.
+    target_latlon (npt.NDArray): An array of shape (T, 2) containing
+                                  longitude and latitude of target points.
+    n_neighbors (int, optional): The number of nearest neighbors to find.
+                                  Must be negative if radius is specified.
+                                  Default is -1.
+    radius (float, optional): The radius within which to search for neighbors.
+                              Must be negative if n_neighbors is specified.
+                              Default is -1.0.
+
+    Returns:
+    Tuple[npt.NDArray, npt.NDArray]: A tuple containing:
+        - nearest_indices (npt.NDArray): Indices of the nearest neighbors in
+                                          the source points, shape (T,nearest_indices)
+        - nearest_distances (npt.NDArray): Distances to the nearest neighbors,
+        shape (T,nearest_indices)
+    """
+    # either n_neighbors or radius should be used but not both
+    assert n_neighbors * radius < 0
+    if radius > 0:
+        mode = "radius"
+        n_neighbors = 5
+    else:
+        mode = "count"
+        radius = 1.0
+
+    neigh = NearestNeighbors(
+        n_neighbors=n_neighbors, metric="cosine", radius=radius
+    ).fit(source_xyz)
+
+    if mode == "count":
+        nearest_distances, nearest_indices = neigh.kneighbors(target_xyz)
+    else:
+        nearest_distances, nearest_indices = neigh.radius_neighbors(target_xyz)
+
+    return (nearest_indices, nearest_distances)

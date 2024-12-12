@@ -91,6 +91,9 @@ class Cubesphere(Mesh):
         triangles = np.r_[faces[:, [0, 1, 2]], faces[:, [2, 3, 0]]]
         return triangles
 
+    def triangle_face(self, triangle_idx):
+        return triangle_idx % self.faces.shape[0]
+
 
 class StratifiedCubeSphere(Mesh):
     """
