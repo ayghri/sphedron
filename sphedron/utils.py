@@ -1,29 +1,24 @@
 from typing import Literal, Tuple
+from numpy.typing import NDArray
 import numpy as np
-import numpy.typing as npt
-from scipy.spatial import transform
 from sklearn.neighbors import NearestNeighbors
+from scipy.spatial.transform import Rotation
 
 
-def rotate_vertices(vertices: npt.NDArray, axis: str, angle: float):
-    """
-    Rotate the mesh
-    Args:
-        vertices: (np.array) shape (num_vertices, 3)
-    Returns:
-        vertices: (np.array) rotated vertices of shape (num_vertices, 3)
-
-    """
-    # return transform.Rotation.from_euler(seq=axis, angles=rotation_angle).apply(
-    #     vertices
-    # )
-    rotation = transform.Rotation.from_euler(seq=axis, angles=angle)
-    rotation_matrix = rotation.as_matrix()
-    vertices = np.dot(vertices, rotation_matrix)
-    return vertices
+def faces_to_edges(faces: NDArray):
+    # faces shape (N, k) usually k = 3
+    num_edges_per_face = faces.shape[1]
+    # return the pairs face[i,(i+1) % N]
+    return np.concatenate(
+        [
+            faces[:, [i, (i + 1) % num_edges_per_face]]
+            for i in range(num_edges_per_face)
+        ],
+        axis=0,
+    )
 
 
-def split_edges(edge_extremes: npt.NDArray, num_segments: int, use_angle: bool):
+def split_edges(edge_extremes: NDArray, num_segments: int, use_angle: bool = False):
     """
     Given an array of E pairs of extremities, returns the new points that
     are equally distanced by edge_length/num_segments. (num_segments=1 return nothing)
@@ -31,10 +26,10 @@ def split_edges(edge_extremes: npt.NDArray, num_segments: int, use_angle: bool):
     are equally distanced by angle (to the normalized points are equally distance)
 
     Args:
-        edge_vertices:  extremitie of shape (E,2,3)
+        edge_vertices:  extremities of shape (E,2,3)
         num_segments: int,
-        use_length: bool, set to false if the new points should be equally distanced
-                    by angle
+        use_angle: bool, set to true if the new points should be equally distanced
+            by angle
     Returns:
         Array of shape (E*(num_segments-1), 3)
     """
@@ -60,12 +55,11 @@ def split_edges(edge_extremes: npt.NDArray, num_segments: int, use_angle: bool):
 
 
 def triangle_refine(
-    vertices: npt.NDArray,
-    faces: npt.NDArray,
+    vertices: NDArray,
+    triangles: NDArray,
     factor: int,
     use_angle: bool = False,
-    normalize: bool = True,
-) -> Tuple[npt.NDArray, npt.NDArray]:
+) -> Tuple[NDArray, NDArray]:
     """
     Adapted from https://github.com/vedranaa/icosphere
     Given a base mesh, refine it using 1/depth factor
@@ -79,35 +73,32 @@ def triangle_refine(
         Vertices and faces of the refined mesh
     """
     if factor <= 1:
-        return vertices, faces
+        return vertices, triangles
     # shape [E, 3], where E = F * 3
     edges = np.concatenate(
-        [faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [0, 2]]], axis=0
+        [triangles[:, [0, 1]], triangles[:, [1, 2]], triangles[:, [0, 2]]], axis=0
     )
 
     # sort in alphabetic order and remove duplicates
     # WARN: shape (2,E)
     edges = np.unique(np.sort(edges, axis=1), axis=0)
-    num_faces = faces.shape[0]
-    num_vertices = vertices.shape[0]
-    num_edges = edges.shape[0]
-    subfaces = np.empty((num_faces * factor**2, 3), dtype=int)
-    new_vertices = np.empty(
-        (
-            num_vertices
-            + num_edges * (factor - 1)  # Vertices on edges
-            + num_faces
-            * (factor - 1)
-            * (factor - 2)
-            // 2,  # vertices on faces, none if d=2
-            3,
-        )
+    n_triangles = triangles.shape[0]
+    n_vertices = vertices.shape[0]
+    n_edges = edges.shape[0]
+    sub_triangles = np.empty((n_triangles * factor**2, 3), dtype=int)
+    n_new_vertices = (
+        n_edges * (factor - 1)  # Vertices on edges
+        + n_triangles
+        * (factor - 1)
+        * (factor - 2)
+        // 2  # vertices on faces, none if factor=2
     )
-    new_vertices[:num_vertices] = vertices
+    new_vertices = np.empty((n_new_vertices, 3))
+    new_vertices = np.concatenate([vertices, new_vertices], axis=0)
 
     # Dictionary used to determine the direction of the edge to avoid redundancy
     edge_index = dict()
-    for i in range(num_edges):
+    for i in range(n_edges):
         edge_index[(edges[i, 0], edges[i, 1])] = i
         edge_index[(edges[i, 1], edges[i, 0])] = i
 
@@ -122,30 +113,28 @@ def triangle_refine(
         use_angle=use_angle,
     )
     # Step 1: e add (depth-1) vertices per edge
-    new_vertices[num_vertices : num_vertices + num_edges * (factor - 1)] = (
-        vertices_on_edges
-    )
+    new_vertices[n_vertices : n_vertices + n_edges * (factor - 1)] = vertices_on_edges
 
-    r = np.arange(factor - 1) + num_vertices
-    start_idx = num_edges * (factor - 1) + num_vertices
+    r = np.arange(factor - 1) + n_vertices
+    start_idx = n_edges * (factor - 1) + n_vertices
     num_inside_vertices = (factor - 1) * (factor - 2) // 2
     T_ref = np.arange(start_idx, num_inside_vertices + start_idx)
-    for f in range(num_faces):
+    for f in range(n_triangles):
         # First, fixing connectivity. We get hold of the indices of all
         # vertices invoved in this subface: original, on-edges and on-faces.
         T = T_ref + f * num_inside_vertices
-        eAB = (faces[f, 0], faces[f, 1])
-        eAC = (faces[f, 0], faces[f, 2])
-        eBC = (faces[f, 1], faces[f, 2])
+        eAB = (triangles[f, 0], triangles[f, 1])
+        eAC = (triangles[f, 0], triangles[f, 2])
+        eBC = (triangles[f, 1], triangles[f, 2])
         # -- Already added in Step 1
         # Sorting the vertices on edges in the right order
         # making sure edge is oriented from lower to higher vertex index
         AB = (edge_index[eAB] * (factor - 1) + r)[:: e_direction(eAB)]
         AC = (edge_index[eAC] * (factor - 1) + r)[:: e_direction(eAC)]
         BC = (edge_index[eBC] * (factor - 1) + r)[:: e_direction(eBC)]
-        VEF = np.r_[faces[f], AB, AC, BC, T]  # vertices in template order
+        VEF = np.r_[triangles[f], AB, AC, BC, T]  # vertices in template order
         # sort vertices in ordering
-        subfaces[f * factor**2 : (f + 1) * factor**2, :] = VEF[reordered_template]
+        sub_triangles[f * factor**2 : (f + 1) * factor**2, :] = VEF[reordered_template]
         # Now geometry, computing positions of on face vertices.
         new_vertices[T, :] = triangle_interior(
             new_vertices[AB, :],
@@ -153,16 +142,12 @@ def triangle_refine(
             use_angle=use_angle,
         )
 
-    # normalize vertices
-    if normalize:
-        new_vertices = new_vertices / np.linalg.norm(
-            new_vertices, axis=1, keepdims=True
-        )
+    new_vertices = new_vertices / np.linalg.norm(new_vertices, axis=1, keepdims=True)
 
-    return (new_vertices, subfaces)
+    return (new_vertices, sub_triangles)
 
 
-def triangle_template(nu: int) -> npt.NDArray[np.int64]:
+def triangle_template(nu: int) -> NDArray[np.int64]:
     """
     Template for linking subfaces                  0
     in a subdivision of a face.                   / \
@@ -228,7 +213,7 @@ def triangles_order(nu: int):
     return np.array(o)
 
 
-def triangle_interior(AB: npt.NDArray, AC: npt.NDArray, use_angle: bool = False):
+def triangle_interior(AB: NDArray, AC: NDArray, use_angle: bool = False):
     """
     Returns coordinates of the inside (on-face) vertices (marked by star) for subdivision
     of the face ABC when given coordinates of the on-edge verticesAB[i] and AC[i].                     
@@ -245,6 +230,7 @@ def triangle_interior(AB: npt.NDArray, AC: npt.NDArray, use_angle: bool = False)
     Args:
         AB (array): shape (nu)
         AC (array): [TODO:description]
+        use_angle (float): 
 
     vAB: ndarray, shape(depth-2,3)
     vAC: ndarray, shape(depth-2,3)
@@ -267,12 +253,12 @@ def triangle_interior(AB: npt.NDArray, AC: npt.NDArray, use_angle: bool = False)
 
 
 def square_refine(
-    vertices: npt.NDArray,
-    squares: npt.NDArray,
+    vertices: NDArray,
+    squares: NDArray,
     factor: int,
     use_length: bool = True,
-    normalize: bool = True,
-) -> Tuple[npt.NDArray, npt.NDArray]:
+    # normalize: bool = True,
+) -> Tuple[NDArray, NDArray]:
     """
     Adapted from https://github.com/vedranaa/icosphere
     Given a base mesh, refine it using 1/depth factor
@@ -364,18 +350,13 @@ def square_refine(
             new_vertices[BC, :],
             use_length=use_length,
         )
-    # normalize vertices
-    if normalize:
-        new_vertices = new_vertices / np.linalg.norm(
-            new_vertices,
-            axis=1,
-            keepdims=True,
-        )
+    # normalize vertices to position them on the unit sphere
+    new_vertices = new_vertices / np.linalg.norm(new_vertices, axis=1, keepdims=True)
 
     return (new_vertices, subsquares)
 
 
-def square_template(nu: int) -> npt.NDArray[np.int64]:
+def square_template(nu: int) -> NDArray[np.int64]:
     """
     Template for linking subfaces    0===1===2===3
     in a subdivision of a face.      |   |   |   |
@@ -437,7 +418,7 @@ def squares_order(nu: int):
     return np.array(order)
 
 
-def square_interior(AD: npt.NDArray, BC: npt.NDArray, use_length: bool = True):
+def square_interior(AD: NDArray, BC: NDArray, use_length: bool = True):
     """
      Returns coordinates of the inside (on-face) vertices (marked by star) for subdivision
      of the face ABCC when given coordinates of the on-edge vertices AD[i] and BC[i].
@@ -499,9 +480,9 @@ def compute_angles_per_depth(max_depth=100):
 
 
 def compute_edges_lenghts(
-    vertices: npt.NDArray,
-    edges: npt.NDArray[np.int_],
-) -> npt.NDArray:
+    vertices: NDArray,
+    edges: NDArray[np.int_],
+) -> NDArray:
     """Given the vertices and the edges, compute the length of each edge
 
     Args:
@@ -518,52 +499,48 @@ def compute_edges_lenghts(
 
 
 def compute_edges_angles(
-    vertices: npt.NDArray,
-    faces: npt.NDArray,
-) -> npt.NDArray:
+    vertices: NDArray,
+    faces: NDArray,
+) -> NDArray:
     """
     Calculate the angles between vertices based on the lengths of edges.
 
     Parameters:
-    vertices (npt.NDArray): An array of vertex coordinates.
-    faces (npt.NDArray): An array of face indices that define the connectivity of vertices.
+    vertices (NDArray): An array of vertex coordinates.
+    faces (NDArray): An array of face indices that define the connectivity of vertices.
 
     Returns:
-    npt.NDArray: An array of angles (in degrees) between vertices calculated from edge lengths.
+    NDArray: An array of angles (in degrees) between vertices calculated from edge lengths.
     """
     edges_lengths = compute_edges_lenghts(vertices, faces)
     angles_between_vertices = 360 * np.arcsin(edges_lengths / 2) / np.pi
     return angles_between_vertices
 
 
-def change_grid(
-    source_xyz: npt.NDArray,
-    target_xyz: npt.NDArray,
+def find_nearest_nodes(
+    reference_xyz: NDArray,
+    target_xyz: NDArray,
     n_neighbors: int = -1,
     radius: float = -1.0,
-) -> Tuple[npt.NDArray, npt.NDArray]:
+) -> Tuple[NDArray, NDArray]:
     """
     Transpose a grid by finding the nearest neighbors of target points
-    among the source points based on geographic coordinates.
+    among the reference points based on geographic coordinates.
 
     Parameters:
-    source_latlon (npt.NDArray): An array of shape (S, 2) containing
-                                  longitude and latitude of source points.
-    target_latlon (npt.NDArray): An array of shape (T, 2) containing
-                                  longitude and latitude of target points.
-    n_neighbors (int, optional): The number of nearest neighbors to find.
-                                  Must be negative if radius is specified.
-                                  Default is -1.
-    radius (float, optional): The radius within which to search for neighbors.
-                              Must be negative if n_neighbors is specified.
-                              Default is -1.0.
+    reference_xyz: of shape (R, 3), containing the coordinates of references.
+    target_xyz: of shape (T, 3), containing the coordinates of targets.
+    n_neighbors: Number of nearest neighbors. Must be negative if radius > 0.
+        Default is -1.
+    radius: The radius within which to search for neighbors. Negative if n_neighbors>0.
+        Default is -1.0.
 
     Returns:
-    Tuple[npt.NDArray, npt.NDArray]: A tuple containing:
-        - nearest_indices (npt.NDArray): Indices of the nearest neighbors in
-                                          the source points, shape (T,nearest_indices)
-        - nearest_distances (npt.NDArray): Distances to the nearest neighbors,
-        shape (T,nearest_indices)
+    Tuple[NDArray, NDArray]: A tuple containing:
+        - nearest_indices (NDArray)  : Indices of the nearest reference points,
+                                            shape (T,nearest_indices)
+        - nearest_distances (NDArray): Distances to the nearest neighbors,
+                                            shape (T,nearest_indices)
     """
     # either n_neighbors or radius should be used but not both
     assert n_neighbors * radius < 0
@@ -576,7 +553,7 @@ def change_grid(
 
     neigh = NearestNeighbors(
         n_neighbors=n_neighbors, metric="cosine", radius=radius
-    ).fit(source_xyz)
+    ).fit(reference_xyz)
 
     if mode == "count":
         nearest_distances, nearest_indices = neigh.kneighbors(target_xyz)
@@ -584,3 +561,71 @@ def change_grid(
         nearest_distances, nearest_indices = neigh.radius_neighbors(target_xyz)
 
     return (nearest_indices, nearest_distances)
+
+
+def rotate_nodes(nodes: NDArray, axis: str, angle: float):
+    """
+    Rotate the mesh
+    Args:
+        nodes: (np.array) shape (num_nodes, 3)
+    Returns:
+        nodes: (np.array) rotated nodes of shape (num_nodes, 3)
+    """
+    assert len(axis) == 1
+    rotation = Rotation.from_euler(seq=axis, angles=angle).as_matrix()
+    nodes = np.dot(nodes, rotation.T)
+    return nodes
+
+
+def xyz_to_thetaphi(xyz: NDArray) -> NDArray:
+    xyz = xyz / np.linalg.norm(xyz, axis=-1, keepdims=True)
+    theta = np.arccos(xyz[:, 2])
+    phi = np.arctan2(xyz[:, 1], xyz[:, 0])
+    return np.c_[theta, phi]
+
+
+def thetaphi_to_xyz(thetaphi):
+    """
+    Convert spherical coordinates on the sphere to cartesian coordinates
+    """
+    return np.c_[
+        np.cos(thetaphi[:, 1]) * np.sin(thetaphi[:, 0]),
+        np.sin(thetaphi[:, 1]) * np.sin(thetaphi[:, 0]),
+        np.cos(thetaphi[:, 0]),
+    ]
+
+
+def latlon_to_thetaphi(latlon: NDArray) -> NDArray:
+    """
+    Convert latlon to spherical (theta, phi) where theta is the inclination (angle
+    from positive z-axis) and phi the azimuth (z-axis rotation)
+    """
+    return np.c_[np.deg2rad(90 - latlon[:, [0]]), np.deg2rad(latlon[:, [1]])]
+
+
+def thetaphi_to_latlon(thetaphi: NDArray):
+    lats = 90 - np.rad2deg(thetaphi[:, 0])
+    longs = np.rad2deg(thetaphi[:, 1])
+    return np.c_[lats, longs]
+
+
+def xyz_to_latlon(xyz: NDArray) -> NDArray:
+    """
+    Convert Cartesian coordinates on the unit sphere to longitude,latitude
+    Args:
+        xyz: Cartesian coordinates on the sphere, shape (K,3)
+    Returns:
+        latlon: array of shape (K,2)
+    """
+    return thetaphi_to_latlon(xyz_to_thetaphi(xyz))
+
+
+def latlon_to_xyz(latlon: NDArray) -> NDArray:
+    """
+    Convert longitude,latitude to Cartesian coordinates on the unit sphere
+    Args:
+        latlon: array of shape (K,2)
+    Returns:
+        Cartesian coordinates on the sphere ,shape (K,3)
+    """
+    return thetaphi_to_xyz(latlon_to_thetaphi(latlon))

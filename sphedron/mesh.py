@@ -1,216 +1,278 @@
-from numpy import typing as npt
+"""
+Ayoub Ghriss, ayoub.ghriss@colorado.edu
+Non-commercial use.
+"""
+
+from typing import List, Tuple, Type
+from numpy.typing import NDArray
 import numpy as np
-from scipy import spatial
+from scipy.spatial import cKDTree  # pyright: ignore
 import trimesh
 
 
-from .utils.mesh import rotate_vertices
-from .utils.transform import xyz_to_latlon
-from .utils.transform import latlon_to_xyz
+from .utils import rotate_nodes
+from .utils import xyz_to_latlon
+from .utils import latlon_to_xyz
+from .utils import faces_to_edges
 
 
 class Mesh:
     """
-    A mesh base class consisting of faces and vertices
-    Each face is a triangle of 3 vertices
+    A mesh base class consisting of faces and nodes
+    Each face is a triangle of 3 nodes
     """
 
-    rotation_angle = 0.0
-    rotation_axis = "x"
+    rotation_angles = 0.0
+    rotation_axes = "x"
 
-    def __init__(
-        self,
-        vertices: npt.NDArray,
-        faces: npt.NDArray[np.int_],
-        cartesian_vertices=True,
-        rotate: bool = False,
-    ):
+    def __init__(self, nodes, faces, rotate: bool = False):
         self.meta = {}
         if rotate:
-            vertices = rotate_vertices(
-                vertices,
-                axis=self.rotation_axis,
-                angle=self.rotation_angle,
+            nodes = rotate_nodes(
+                nodes,
+                axis=self.rotation_axes,
+                angles=self.rotation_angles,
             )
-        self._all_vertices = vertices
+        self._all_nodes = nodes
         self._all_faces = faces
-        self.vertices_subset: npt.NDArray  # indices of vertices to be included
-        self.vertices_sorting: npt.NDArray  # sorting of the vertices
-        self.faces_subset: npt.NDArray  # indices of the faces to include in the mesh
-        if not cartesian_vertices:
-            self._all_vertices = latlon_to_xyz(vertices)
+        self._nodes_to_keep: NDArray  # indices of nodes to be included
         self.reset()
+
+    @staticmethod
+    def base() -> Tuple[NDArray, NDArray]:
+        raise NotImplementedError
+
+    @staticmethod
+    def refine(nodes, faces, factor, **kwargs) -> Tuple[NDArray, NDArray]:
+        raise NotImplementedError
 
     def reset(self):
         """
-        Resets the mesh to its initial state by reinitializing the vertices and
-        faces subsets.
-        This method updates the vertices and faces subsets to include all available
-        vertices and faces, and reconstructs the mesh using the Trimesh class.
+        Resets the mesh to its initial state by reinitializing the nodes mask
         """
-        self.vertices_subset = np.arange(self._all_vertices.shape[0])
-        self.vertices_sorting = np.arange(self._all_vertices.shape[0])
-        self.faces_subset = np.arange(self._all_faces.shape[0])
+        self._nodes_to_keep = np.ones(self._all_nodes.shape[0], dtype=bool)
 
     def __repr__(self) -> str:
-        return f"Mesh has:\
-                \n\t #vertices: {self.num_vertices}\
-                \n\t #faces: {self.num_faces},\
-                \n\t #edges: {self.edges.shape[0]},\
-                \n\t #edges_unique: {self.edges_unique.shape[0]},\
-                \n\tmeta: {self.meta}"
+        return (
+            f"Mesh has: #nodes: {self.num_nodes}\n"
+            f"          #faces: {self.num_faces}\n"
+            f"          #edges: {self.num_edges}\n"
+            f"          #edges_unique: {self.edges_unique.shape[0]}\n"
+            f"          metadata: {self.meta}"
+        )
 
     @property
-    def vertices(self):
-        return self._all_vertices[self.vertices_subset]
-
-    @property
-    def num_vertices(self):
-        return self.vertices_subset.shape[0]
-
-    @property
-    def triangles(self):
-        return self.faces
-
-    def triangle_face(self, triangle_idx):
-        return triangle_idx
-
-    @property
-    def faces(self) -> npt.NDArray[np.int_]:
-        return self.vertices_sorting[self._all_faces[self.faces_subset]]
-
-    @property
-    def num_faces(self):
-        return self.faces_subset.shape[0]
-
-    @property
-    def vertices_latlon(self):
-        return xyz_to_latlon(self.vertices)
+    def _node_sorting(self):
+        # simple trick that is equivalent to mapping each retained node to its
+        # position among all the retained nodes
+        return np.cumsum(self._nodes_to_keep) - 1
 
     @property
     def edges(self):
-        """
-        Get the edges of the mesh, with possibly redundant ones
+        edges = faces_to_edges(self._all_faces)
+        # discard edges connected to a masked node
+        edges_to_keep = np.all(self._nodes_to_keep[edges], axis=1)
+        return self._node_sorting[edges[edges_to_keep]]
 
-        Returns:
-            numpy.ndarray:  shape (num_edges, 2), where the connected vertices are
-            (edges[i,0], edges[i,1])
-        """
-        # each face is a sequence of indices, length N
-        num_edges_per_face = self._all_faces.shape[1]
-        # return the pairs face[i,(i+1) % N]
-        return np.concatenate(
-            [
-                self.faces[:, [i, (i + 1) % num_edges_per_face]]
-                for i in range(num_edges_per_face)
-            ],
-            axis=0,
-        )
+    @property
+    def edges_symmetric(self) -> NDArray[np.int_]:
+        return np.r_[self.edges_unique, self.edges_unique[:, ::-1]]
 
     @property
     def edges_unique(self):
-        """
-        Get the unique edges of the mesh
-
-        Returns:
-            numpy.ndarray:  shape (num_edges_unique, 2), where the connected vertices
-            are (edges[i,0], edges[i,1])
-        """
         return np.unique(np.sort(self.edges, axis=1), axis=0)
 
     @property
-    def edges_symmetric(self) -> npt.NDArray[np.int_]:
-        """
-        Get the symmetric edges of the mesh, so that it includes [v_i,v_j] and
-        [v_j,v_i], without redundancy.
+    def faces(self) -> NDArray[np.int_]:
+        # only faces whose nodes are all retained
+        retained_faces = np.all(self._nodes_to_keep[self._all_faces], axis=1)
+        return self._node_sorting[self._all_faces[retained_faces]]
 
-        Returns:
-            numpy.ndarray:  shape (2*num_edges_unique, 2), where the connected vertices are
-            (edges[i,0], edges[i,1])
-        """
-        return np.r_[self.edges_unique, self.edges_unique[:, ::-1]]
+    @property
+    def faces_partial(self) -> NDArray:
+        retained_faces = np.any(self._nodes_to_keep[self._all_faces], axis=1)
+        return self._node_sorting[self._all_faces[retained_faces]]
 
-    def exclude_faces(self, faces_mask: npt.NDArray[np.bool_]):
-        """
-        Mask faces and their associated vertices.
-        """
-        self.faces_subset = self.faces_subset[np.logical_not(faces_mask)]
-        self.vertices_subset = np.unique(self._all_faces[self.faces_subset])
-        self.vertices_sorting = -np.ones(self._all_vertices.shape[0], dtype=np.int_)
-        self.vertices_sorting[self.vertices_subset] = np.arange(
-            self.vertices_subset.shape[0]
-        )
+    @property
+    def nodes(self):
+        return self._all_nodes[self._nodes_to_keep]
 
-        self.trimesh = trimesh.Trimesh(
-            self._all_vertices[self.vertices_subset],
-            self.vertices_sorting[self._all_faces[self.faces_subset]],
-        )
+    @property
+    def nodes_latlon(self):
+        return xyz_to_latlon(self.nodes)
 
-    def exclude_faces_by_vertex(self, vertices_mask: npt.NDArray[np.bool_]):
-        """
-        Mask the faces associated with the provided masked vertices
-        Expects a boolean mask.
-        """
-        faces = self.faces
-        assert self.num_vertices == vertices_mask.shape[0]
-        faces_to_exclude = np.any(vertices_mask[faces], axis=1)
-        self.exclude_faces(faces_to_exclude)
+    @property
+    def triangles(self):
+        raise NotImplementedError
 
-    def exclude_vertices(self, vertices_mask: npt.NDArray[np.bool_]):
-        """
-        Mask the faces associated with the provided masked vertices
-        Expects a boolean mask.
-        """
-        vertices_subset = self.vertices_subset[np.logical_not(vertices_mask)]
-        # mask faces when its entire vertices are masked:
-        vertices_sorting = -np.ones(self._all_vertices.shape[0], dtype=np.int_)
-        vertices_sorting[vertices_subset] = np.arange(vertices_subset.shape[0])
-        # exclude faces for which at least 2 vertices have been masked
-        # this is not necessary, but might speed up things if the mesh is too fine
-        faces_to_exclude = (
-            np.sum(vertices_sorting[self._all_faces[self.faces_subset]] < 0, axis=1)
-            >= 2
-        )
-        self.exclude_faces(faces_to_exclude)
-        self.vertices_subset = vertices_subset
-        self.vertices_sorting = vertices_sorting
+    @property
+    def num_edges(self):
+        return self.edges.shape[0]
 
-    def from_source_edges(
+    @property
+    def num_faces(self):
+        retained_faces = np.all(self._nodes_to_keep[self._all_faces], axis=1)
+        return int(np.sum(retained_faces))
+
+    @property
+    def num_nodes(self):
+        return np.sum(self._nodes_to_keep)
+
+    def triangle_face_index(self, triangle_idx):
+        raise NotImplementedError
+
+    def mask_nodes(self, nodes_mask: NDArray[np.bool_]):
+        """
+        Mask the nodes associated with nodes_mask[i]==True
+        Expects a boolean mask of num_nodes size.
+        Does not unmask previously masked nodes
+        """
+
+        if nodes_mask.shape[0] != self.num_nodes:
+            raise ValueError(
+                f"Nodes mask should have num_nodes={self.num_nodes} entries"
+            )
+        assert self.num_nodes == nodes_mask.shape[0]
+        self._nodes_to_keep[self._nodes_to_keep] = ~nodes_mask
+
+    def build_trimesh(self):
+        """
+        return Trimesh instance from the current nodes and faces
+
+        """
+
+        mesh = trimesh.Trimesh(self.nodes, self.triangles)
+        mesh.fix_normals()
+        return mesh
+
+    def radius_query_edges(
         self,
-        source_mesh: "Mesh",
+        target_mesh: "Mesh",
         radius: float,
-    ) -> npt.NDArray[np.int_]:
+    ) -> NDArray[np.int_]:
         """
         Return the edges (i,j) where i is the index of the source mesh node s_i
         and j the index of the current mesh node t_j such that s_i is within radius of
         t_j.
         """
-        current_indices = spatial.cKDTree(self.vertices).query_ball_point(
-            x=source_mesh.vertices,
+        current_indices = cKDTree(target_mesh.nodes).query_ball_point(
+            x=self.nodes,
             r=radius,
         )
-        source_to_current_edges = []
-        for source_v, mesh_v in enumerate(current_indices):
-            for v in mesh_v:
-                source_to_current_edges.append((source_v, v))
-        return np.array(source_to_current_edges)
+        current_to_target_edges = []
+        for current_v, target_nodes in enumerate(current_indices):
+            for target_v in target_nodes:
+                current_to_target_edges.append((current_v, target_v))
+        return np.array(current_to_target_edges)
 
-    def build_trimesh(self):
+    def triangle_query_edges(self, target_mesh: "Mesh") -> NDArray:
+        """Returns current(source)-target edge indices where each target node is connected
+        to the nodes of the nearest triangle from the current mesh
+        Args:
+            target_mesh: ...
+        Returns:
+            np.array of shape (target_mesh.num_nodes*3, 2) containing the edges
         """
-        return Trimesh instance from the current vertices and faces
 
+        current_trimesh = self.build_trimesh()
+        target_nodes = target_mesh.nodes
+        _, _, query_face_indices = trimesh.proximity.closest_point(
+            current_trimesh, target_nodes
+        )
+
+        nearest_triangles = self.triangles[query_face_indices]
+
+        target_nodes = np.tile(np.arange(target_nodes.shape[0])[:, None], (1, 3))
+        return np.stack(
+            [nearest_triangles[..., None], target_nodes[..., None]], axis=-1
+        ).reshape(-1, 2)
+
+
+class NestedMeshes(Mesh):
+    """
+    A class to create a stratified icosphere mesh.
+
+    This class generates a mesh composed of multiple icospheres at specified depths,
+    allowing for stratification of the geometry. The total mesh is the concatenation
+    of all levels.
+
+    Parameters:
+    factors (List[int]): A list of integer factors for the icosphere refinement,
+        all factors shoud be > 1
+
+    rotate (bool): A flag indicating whether to rotate the icospheres (default is True).
+    """
+
+    base_mesh_cls: Type[Mesh]
+
+    def __init__(self, factors: List[int], rotate=True, **kwargs):
+        assert np.min(factors) >= 1
+        self.meta = {}
+        self.factors = factors
+        self.meshes = []
+        nodes, faces = self.base_mesh_cls.base()
+        for factor in factors:
+            nodes, faces = self.base_mesh_cls.refine(
+                nodes, faces, factor=factor, **kwargs
+            )
+            self.meshes.append(
+                self.base_mesh_cls(nodes=nodes, faces=faces, rotate=rotate)
+            )
+        self.meta["depth"] = np.cumprod(factors).tolist()
+        self.meta["factor"] = list(factors)
+
+    def reset(self):
+        for mesh in self.meshes:
+            mesh.reset()
+
+    @property
+    def nodes(self):
+        return self.meshes[-1].nodes
+
+    @property
+    def num_edges(self):
+        return sum([mesh.num_edges for mesh in self.meshes])
+
+    @property
+    def num_faces(self):
+        return sum([mesh.num_faces for mesh in self.meshes])
+
+    @property
+    def num_nodes(self):
+        return self.meshes[-1].num_nodes
+
+    @property
+    def triangles(self):
+        return np.concatenate([mesh.triangles for mesh in self.meshes], axis=0)
+
+    @property
+    def edges(self) -> NDArray[np.int_]:
+        return np.concatenate([mesh.edges for mesh in self.meshes], axis=0)
+
+    @property
+    def faces(self) -> NDArray[np.int_]:
+        return np.concatenate([mesh.faces for mesh in self.meshes], axis=0)
+
+    def mask_nodes(self, nodes_mask: NDArray[np.bool_]):
         """
-        mesh = trimesh.Trimesh(self.vertices, self.triangles)
-        mesh.fix_normals()
-        return mesh
+        Mask the nodes associated with nodes_mask[i]==True
+        Expects a boolean mask of num_nodes size.
+        Does not unmask previously masked nodes
+        """
+
+        if nodes_mask.shape[0] != self.num_nodes:
+            raise ValueError(
+                f"Nodes mask should have num_nodes={self.num_nodes} entries"
+            )
+        for mesh in self.meshes:
+            mesh.mask_nodes(nodes_mask[: mesh.num_nodes])
 
 
 class VerticesOnlyMesh(Mesh):
-    def __init__(self, vertices_latlon):
+    def __init__(self, nodes_latlon):
         super().__init__(
-            vertices_latlon,
-            np.zeros_like((vertices_latlon, 3)),
-            cartesian_vertices=False,
+            latlon_to_xyz(nodes_latlon),
+            np.c_[np.arange(nodes_latlon.shape[0]), np.arange(nodes_latlon.shape[0])],
         )
 
 
@@ -226,3 +288,19 @@ class UniformMesh(VerticesOnlyMesh):
         super().__init__(uniform_coords)
         self.uniform_long = uniform_long
         self.uniform_lat = uniform_lat
+
+    # def mask_faces(self, faces_mask: NDArray[np.bool_]):
+    #     """
+    #     Mask faces and their nodes, if the nodes are not associated with other faces
+    #     """
+    #     if faces_mask.shape[0] != self.num_faces:
+    #         raise ValueError(
+    #             f"Faces mask should have num_faces={self.num_faces} entries"
+    #         )
+    #     # self.faces_mask = self.faces_mask[np.logical_not(faces_mask)]
+    #     # self.nodes_mask = np.unique(self._all_faces[self.faces_mask])
+    #     # nodes_mask =
+    #     retained_nodes = np.unique(self.faces[~faces_mask])
+    #     nodes_mask = np.ones(self.num_nodes, dtype=bool)
+    #     nodes_mask[retained_nodes] = False
+    #     self.mask_nodes(nodes_mask)

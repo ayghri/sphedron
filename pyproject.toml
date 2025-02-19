@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "sphedron"
 version = "0.1.0"
-description = "Polyhedron-based meshes for the sphere"
+description = "Sphere Polyhedron-based meshes"
 authors = ["Ayoub Ghriss <dev@ayghri.com>"]
 readme = "README.md"
 
@@ -13,9 +13,10 @@ python = ">=3.10"
 numpy = "^2.0.1"
 scipy = "^1.14.0"
 scikit-learn = "^1.5.1"
-shapely = {version="^2.0.5", optional = true}
-cartopy = {version="^0.23.0", optional = true}
+shapely = {version="^2.0.5", optional=true}
+cartopy = {version="^0.23.0", optional=true}
 matplotlib = { version= "^3.9.2", optional=true}
+trimesh = "^4.5.3"
 
 [tool.poetry.group.dev.dependencies]
 jupyter = "^1.0.0"

@@ -1,14 +1,14 @@
 """
-Ayoub Ghriss, dev@ayghri.com
+Ayoub Ghriss, ayoub.ghriss@colorado.edu
 Non-commercial use.
 """
 
-from typing import List
 import numpy as np
 import time
 
 from .mesh import Mesh
-from .utils.mesh import triangle_refine
+from .mesh import NestedMeshes
+from .utils import triangle_refine
 
 
 class Icosphere(Mesh):
@@ -19,41 +19,54 @@ class Icosphere(Mesh):
     rotation_angle :
     rotation_axis :
 
+
     """
 
-    rotation_angle = (np.pi - 2 * np.arcsin((1 + np.sqrt(5)) / 2 / np.sqrt(3))) / 2
-    rotation_axis = "y"
+    rotation_angles = np.pi / 2 - np.arcsin((1 + np.sqrt(5)) / np.sqrt(12))
+    rotation_axes = "y"
 
     def __init__(
         self,
-        depth: int,
+        factor: int = 1,
         rotate=True,
         use_angle=False,
-        normalize=True,
+        nodes=None,
+        faces=None,
+        **kwargs,
     ):
+
+        self.use_angle = use_angle
+
         start = time.time()
-        base_vertices, base_faces = self.base()
-        vertices, faces = triangle_refine(
-            base_vertices,
-            base_faces,
-            factor=depth,
-            use_angle=use_angle,
-            normalize=normalize,
-        )
-        super().__init__(vertices=vertices, faces=faces, rotate=rotate)
+        if nodes is None or faces is None:
+            base_nodes, base_faces = self.base()
+        else:
+            base_nodes = nodes
+            base_faces = faces
+        if factor > 1:
+            nodes, faces = self.refine(
+                base_nodes, base_faces, factor=factor, use_angle=use_angle
+            )
+
+        super().__init__(nodes, faces, rotate=rotate, **kwargs)
+
         self.meta["compute time (ms)"] = 1000 * (time.time() - start)
-        self.meta["depth"] = depth
+        self.meta["factor"] = factor
+
+    @staticmethod
+    def refine(nodes, faces, factor, use_angle=False, **kwargs):
+        return triangle_refine(nodes, faces, factor=factor, use_angle=use_angle)
 
     @staticmethod
     def base():
         """
         Create the base icosphere
         Returns:
-            Tuple (vertices, faces) for shape (12,3), (20,3)
+            Tuple (nodes, faces) for shape (12,3), (20,3)
         """
 
         phi = (1 + np.sqrt(5)) / 2
-        vertices = np.array(
+        nodes = np.array(
             [
                 [0, 1, phi],
                 [0, -1, phi],
@@ -63,8 +76,8 @@ class Icosphere(Mesh):
                 [-phi, 0, 1],
             ]
         )
-        vertices = np.concatenate([vertices, -vertices], axis=0)
-        vertices = vertices / np.sqrt(1 + phi**2)
+        nodes = np.concatenate([nodes, -nodes], axis=0)
+        nodes = nodes / np.linalg.norm(nodes, axis=1, keepdims=True)
         faces = np.array(
             [
                 [0, 1, 4],
@@ -90,35 +103,18 @@ class Icosphere(Mesh):
             ],
             dtype=int,
         )
-        return vertices, faces
+        return nodes, faces
+
+    @property
+    def triangles(self):
+        return self.faces
+
+    def triangle_face_index(self, triangle_idx):
+        return triangle_idx
 
 
-class StratifiedIcospheres(Mesh):
-    """
-    A class to create a stratified icosphere mesh.
+class NestedIcospheres(NestedMeshes):
+    base_mesh_cls = Icosphere
 
-    This class generates a mesh composed of multiple icospheres at specified depths,
-    allowing for stratification of the geometry. The total mesh is the concatenation
-    of all levels.
-
-    Parameters:
-    factors (List[int]): A list of integer factors for the icosphere refinement,
-        all factors shoud be > 1
-
-    rotate (bool): A flag indicating whether to rotate the icospheres (default is True).
-    """
-
-    def __init__(self, factors: List[int], rotate=True):
-        # we build the icospheres in a stratified way
-        # where next refinement takes the current one
-        # the refinement keeps the current vertices and adds new ones
-        # so the vertices of the last refinement contains the vertices of all
-        assert np.min(factors) >= 1
-        all_faces = []
-        vertices, faces = Icosphere.base()
-        for factor in factors:
-            vertices, faces = triangle_refine(vertices, faces, factor=factor)
-            all_faces.append(faces)
-        faces = np.concatenate(all_faces, axis=0)
-        super().__init__(vertices, faces, rotate=rotate)
-        self.meta["depths"] = np.cumprod(factors)
+    def triangle_face_index(self, triangle_idx):
+        return triangle_idx

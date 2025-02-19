@@ -1,10 +1,11 @@
 """
-Ayoub Ghriss, dev@ayghri.com
+Ayoub Ghriss, ayoub.ghriss@colorado.edu
 Non-commercial use.
 """
 
 import numpy as np
 from .icosphere import Icosphere
+from .icosphere import NestedIcospheres
 
 
 class Octasphere(Icosphere):
@@ -42,3 +43,7 @@ class Octasphere(Icosphere):
         )
 
         return vertices, faces
+
+
+class NestedOctaspheres(NestedIcospheres):
+    base_mesh_cls = Octasphere

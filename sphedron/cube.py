@@ -3,32 +3,24 @@ Ayoub Ghriss, dev@ayghri.com
 Non-commercial use.
 """
 
-from typing import List
 import numpy as np
-from .mesh import Mesh
-from .utils.mesh import rotate_vertices, square_refine
+from .utils import square_refine
+from .icosphere import Icosphere
+from .icosphere import NestedMeshes
 
 
-class Cubesphere(Mesh):
+class Cubesphere(Icosphere):
     rotation_angle = np.pi / 4
     rotation_axis = "y"
 
-    def __init__(self, depth: int, rotate=False, use_angle=False, normalize=True):
-        base_vertices, base_squares = self.base()
-        vertices, squares = square_refine(
-            base_vertices,
-            base_squares,
-            factor=depth,
+    @staticmethod
+    def refine(nodes, faces, factor, use_angle=False, **kwargs):
+        return square_refine(
+            nodes,
+            squares=faces,
+            factor=factor,
             use_length=use_angle,
-            normalize=normalize,
         )
-        # self.squares = squares
-        if rotate:
-            vertices = rotate_vertices(
-                vertices, axis=self.rotation_axis, angle=self.rotation_angle
-            )
-        super().__init__(vertices=vertices, faces=squares)
-        self.meta["depth"] = depth
 
     @staticmethod
     def base():
@@ -36,7 +28,7 @@ class Cubesphere(Mesh):
               Create the base cube
 
               Returns:
-                  Tuple (vertices, faces) of shapes (8,3), (6,3)
+                  Tuple (nodes, faces) of shapes (8,3), (6,3)
 
             (-1,-1,1) 4------------5 (-1,1,1)
                      /|           /|
@@ -50,7 +42,7 @@ class Cubesphere(Mesh):
         (1,-1,-1) 3------------2 (1,1,-1)
         """
 
-        vertices = np.array(
+        nodes = np.array(
             [
                 [1, -1, 1],
                 [1, 1, 1],
@@ -62,7 +54,7 @@ class Cubesphere(Mesh):
                 [-1, -1, -1],
             ]
         )
-        vertices = vertices / np.sqrt(3)
+        nodes = nodes / np.sqrt(3)
         faces = np.array(
             [
                 [0, 1, 2, 3],
@@ -75,15 +67,7 @@ class Cubesphere(Mesh):
             dtype=int,
         )
 
-        return vertices, faces
-
-    @property
-    def num_vertices(self):
-        return self.vertices.shape[0]
-
-    @property
-    def num_faces(self):
-        return self.faces.shape[0]
+        return nodes, faces
 
     @property
     def triangles(self):
@@ -91,35 +75,12 @@ class Cubesphere(Mesh):
         triangles = np.r_[faces[:, [0, 1, 2]], faces[:, [2, 3, 0]]]
         return triangles
 
-    def triangle_face(self, triangle_idx):
-        return triangle_idx % self.faces.shape[0]
+    def triangle_face_index(self, triangle_idx):
+        return triangle_idx % self.num_faces
 
 
-class StratifiedCubeSphere(Mesh):
-    """
-    A class to create a stratified icosphere mesh.
+class NestedCubespheres(NestedMeshes):
+    base_mesh_cls = Cubesphere
 
-    This class generates a mesh composed of multiple icospheres at specified depths,
-    allowing for stratification of the geometry. The total mesh is the concatenation
-    of all levels.
-
-    Parameters:
-    factors (List[int]): A list of integer factors for the icosphere refinement,
-        all factors shoud be > 1
-
-    rotate (bool): A flag indicating whether to rotate the icospheres (default is True).
-    """
-
-    def __init__(self, factors: List[int], rotate=True):
-        assert np.min(factors) >= 1
-        all_faces = []
-        vertices, faces = Cubesphere.base()
-        for factor in factors:
-            vertices, faces = square_refine(
-                vertices, faces, factor=factor, normalize=False
-            )
-            all_faces.append(faces)
-        faces = np.concatenate(all_faces, axis=0)
-        triangles = np.r_[faces[:, :3], np.c_[faces[:, 2:], faces[:, 0]]]
-        super().__init__(vertices=vertices, faces=triangles, rotate=rotate)
-        self.meta["depth"] = np.cumprod(factors)
+    def triangle_face_index(self, triangle_idx):
+        return triangle_idx % self.num_faces
