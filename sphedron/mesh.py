@@ -40,10 +40,12 @@ class Mesh:
 
     @staticmethod
     def base() -> Tuple[NDArray, NDArray]:
+        """Create base mesh that will be refined later"""
         raise NotImplementedError
 
     @staticmethod
     def refine(nodes, faces, factor, **kwargs) -> Tuple[NDArray, NDArray]:
+        """Takes the nodes and faces of the mesh and refines them by factor"""
         raise NotImplementedError
 
     def reset(self):
@@ -69,6 +71,7 @@ class Mesh:
 
     @property
     def edges(self):
+        """Returns the edges of the mesh"""
         edges = faces_to_edges(self._all_faces)
         # discard edges connected to a masked node
         edges_to_keep = np.all(self._nodes_to_keep[edges], axis=1)
@@ -76,46 +79,56 @@ class Mesh:
 
     @property
     def edges_symmetric(self) -> NDArray[np.int_]:
+        """Returns the edges of the undirected mesh"""
         return np.r_[self.edges_unique, self.edges_unique[:, ::-1]]
 
     @property
     def edges_unique(self):
+        """Returns the directed edges of the graph, from lower index to higher index nodes"""
         return np.unique(np.sort(self.edges, axis=1), axis=0)
 
     @property
     def faces(self) -> NDArray[np.int_]:
+        """Returns the faces of the mesh, can be rectangles or triangles or more"""
         # only faces whose nodes are all retained
         retained_faces = np.all(self._nodes_to_keep[self._all_faces], axis=1)
         return self._node_sorting[self._all_faces[retained_faces]]
 
     @property
     def faces_partial(self) -> NDArray:
+        """Returns the faces of the mesh including those with partially masked nodes"""
         retained_faces = np.any(self._nodes_to_keep[self._all_faces], axis=1)
         return self._node_sorting[self._all_faces[retained_faces]]
 
     @property
     def nodes(self):
+        """Returns the nodes of mesh in cartesian coordinates"""
         return self._all_nodes[self._nodes_to_keep]
 
     @property
     def nodes_latlon(self):
+        """Returns the nodes of mesh in latitude/longitude format"""
         return xyz_to_latlon(self.nodes)
 
     @property
     def num_edges(self):
+        """Number of edges"""
         return self.edges.shape[0]
 
     @property
     def num_faces(self):
+        """Number of faces"""
         retained_faces = np.all(self._nodes_to_keep[self._all_faces], axis=1)
         return int(np.sum(retained_faces))
 
     @property
     def num_nodes(self):
+        """Number of nodes"""
         return np.sum(self._nodes_to_keep)
 
     @property
     def triangles(self):
+        """Number of triangles"""
         raise NotImplementedError
 
     def triangle2face_index(self, triangle_idx):
@@ -151,6 +164,7 @@ class Mesh:
         return mesh
 
     def query_edges_from_faces(self, receiver_mesh: "Mesh") -> NDArray:
+        """Return edges connecting nodes of the nearest face to receiver nodes"""
         sender_trimesh = self.build_trimesh()
         receiver_nodes = receiver_mesh.nodes
         _, _, query_triangle_indices = trimesh.proximity.closest_point(
@@ -172,6 +186,7 @@ class Mesh:
         radius: float = -1.0,
         n_neighbors: int = -1,
     ):
+        """Return edges connecting nearest neighboring nodes to receiver nodes"""
         nearest_senders = query_nearest(
             self.nodes, receiver_mesh.nodes, radius=radius, n_neighbors=n_neighbors
         )[0]
@@ -182,7 +197,7 @@ class Mesh:
         return np.array(s2r_edges)
 
 
-class NestedMeshes(Mesh):
+class NestedMeshes(Mesh):  # pylint: disable=W0223
     """
     A class to create nested meshes, where self.mesh[i+1] is a refined self.meshes[i]
     """
@@ -202,6 +217,7 @@ class NestedMeshes(Mesh):
             self.meshes.append(
                 self.base_mesh_cls(nodes=nodes, faces=faces, rotate=rotate)
             )
+        super().__init__(None, None)
         self.meta["depth"] = np.cumprod(factors).tolist()
         self.meta["factor"] = list(factors)
 
@@ -215,11 +231,11 @@ class NestedMeshes(Mesh):
 
     @property
     def num_edges(self):
-        return sum([mesh.num_edges for mesh in self.meshes])
+        return sum((mesh.num_edges for mesh in self.meshes))
 
     @property
     def num_faces(self):
-        return sum([mesh.num_faces for mesh in self.meshes])
+        return sum((mesh.num_faces for mesh in self.meshes))
 
     @property
     def num_nodes(self):
@@ -246,15 +262,23 @@ class NestedMeshes(Mesh):
             mesh.mask_nodes(nodes_mask[: mesh.num_nodes])
 
 
-class NodesOnlyMesh(Mesh):
+class NodesOnlyMesh(Mesh):  # pylint: disable=W0223
+    """Mesh where only nodes are provided. creates fakes self-triangles"""
+
     def __init__(self, nodes_latlon):
         super().__init__(
             latlon_to_xyz(nodes_latlon),
             np.c_[np.arange(nodes_latlon.shape[0]), np.arange(nodes_latlon.shape[0])],
         )
 
+    @property
+    def triangles(self):
+        return self.faces
 
-class UniformMesh(NodesOnlyMesh):
+
+class UniformMesh(NodesOnlyMesh):  # pylint: disable=W0223
+    """Mesh of uniformly distributed latitude and longitude"""
+
     def __init__(self, resolution=1.0):
         multiplier_long = int(180.0 / resolution)
         multiplier_lat = int(90.0 / resolution)
