@@ -109,8 +109,11 @@ class Icosphere(Mesh):
     def triangles(self):
         return self.faces
 
-    def triangle_face_index(self, triangle_idx):
+    def triangle2face_index(self, triangle_idx):
         return triangle_idx
+
+    def face2triangle_index(self, face_idx):
+        return face_idx
 
 
 class NestedIcospheres(NestedMeshes):

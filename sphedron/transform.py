@@ -3,56 +3,35 @@ Ayoub Ghriss, ayoub.ghriss@colorado.edu
 Non-commercial use.
 """
 
-from typing import Callable, Dict, Tuple
+from typing import Callable, Dict, Literal, Tuple
 from numpy.typing import NDArray
 import numpy as np
 from scipy.spatial.transform import Rotation
 from .mesh import Mesh
-from .utils import find_nearest_nodes
+from .utils import query_nearest
 from .utils import xyz_to_thetaphi
 
 
 class MeshTransfer:
-    """A class to facilitate the transfer of values between meshes
+    """A class to facilitate the transfer of values between meshes"""
 
-    Parameters
-    ----------
-    meshes : Dict[str, Mesh]
-        A dictionary containing the longitude and latitude arrays for each mesh.
-    n_neighbors: int, default=5
-        Number of nearest neighbors to consider for value transfer.
-
-    Attributes
-    ----------
-    nearest_neighbors :
-    meshes :
-    n_neighbors :
-    meshes_latlons: Dict[str, NDArray], A dictionary mapping mesh names
-        to their longitude and latitude coordinates.
-    nearest_neighbors: Dict[Tuple[str, str], NDArray],
-        A cache for storing nearest neighbor indices for mesh pairs.
-    """
-
-    def __init__(self, meshes: Dict[str, Mesh], n_neighbors: int = 5) -> None:
+    def __init__(
+        self,
+        source_mesh: Mesh,
+        target_mesh: Mesh,
+        n_neighbors: int = 5,
+    ) -> None:
         """ """
-        self.nearest_neighbors: Dict[Tuple[str, str], Tuple[NDArray, NDArray]] = {}
-        self.meshes = meshes
+        self.source_mesh = source_mesh
+        self.target_mesh = target_mesh
         self.n_neighbors = n_neighbors
-
-    def add_mesh(self, mesh_name, mesh: Mesh, replace=False):
-        if mesh_name in self.meshes and not replace:
-            raise AssertionError(
-                f"Mesh {mesh} already exists. Use replace=True to overwrite"
-            )
-        else:
-            self.meshes[mesh_name] = mesh
+        self.nearest_neighbors = None
 
     def transfer(
         self,
         source_vals: NDArray,
-        source_mesh: str,
-        target_mesh: str,
-        average: bool = True,
+        aggregation: Literal["mean", "sum", "max", "min"] = "mean",
+        recompute: bool = False,
     ) -> NDArray:
         """
         Transfers values from the source mesh to the target mesh using nearest neighbor interpolation.
@@ -66,41 +45,37 @@ class MeshTransfer:
         Returns:
             NDArray: The transferred values for the target mesh.
         """
-        assert (
-            source_vals.shape[0] == self.meshes[source_mesh].num_nodes
-        ), "sourcevalues and mesh do not have the number of nodes"
-        nearest_vals = source_vals[self.get_neighbors(source_mesh, target_mesh)]
-        if average:
-            nearest_vals = nearest_vals.mean(1)
-        return nearest_vals
+        if source_vals.shape[0] != self.source_mesh.num_nodes:
+            raise ValueError(
+                f"source_values and mesh do not have the same number of nodes"
+            )
+        nearest_vals = source_vals[self.get_neighbors(recompute)]
+        aggregated_values = None
+        try:
+            aggregated_values = getattr(np, "aggregation")(nearest_vals, axis=1)
+            return aggregated_values
+        except AttributeError:
+            raise ValueError(
+                f"aggregation {aggregation} is invalid, allowed : ['mean', 'sum', 'max', 'min']"
+            )
 
     def weighted_transfer(
         self,
         source_vals: NDArray,
-        source_mesh: str,
-        target_mesh: str,
         weight_func: Callable | None = None,
+        recompute: bool = False,
     ) -> NDArray:
         """
         Transfers values from the source mesh to the target mesh using nearest neighbor interpolation.
 
         Parameters:
             source_vals (NDArray): The values to be transferred from the source mesh.
-            source_mesh (str): The name of the source mesh.
-            target_mesh (str): The name of the target mesh.
             #TODO: add weight_func
 
         Returns:
             NDArray: The transferred values for the target mesh.
         """
-        assert (
-            source_vals.shape[0] == self.meshes[source_mesh].num_nodes
-        ), "sourcevalues and mesh do not have the number of nodes"
-        nearest_idx, nearest_dist = self.get_neighbors(
-            source_mesh,
-            target_mesh,
-            get_distances=True,
-        )
+        nearest_idx, nearest_dist = self.get_neighbors(recompute, get_distances=True)
         nearest_vals = source_vals[nearest_idx]
         if weight_func is None:
             weight_func = lambda x: np.ones_like(x)
@@ -109,62 +84,84 @@ class MeshTransfer:
 
         return (nearest_vals * weights).sum(axis=1)
 
-    def get_neighbors(self, source_mesh, target_mesh, get_distances=False):
-        if (source_mesh, target_mesh) not in self.nearest_neighbors:
-            self.nearest_neighbors[(source_mesh, target_mesh)] = find_nearest_nodes(
-                self.meshes[source_mesh].nodes,
-                self.meshes[target_mesh].nodes,
+    def get_neighbors(self, recompute: bool, get_distances=False):
+        if self.nearest_neighbors is None or recompute:
+            self.nearest_neighbors = query_nearest(
+                self.source_mesh.nodes,
+                self.target_mesh.nodes,
                 n_neighbors=self.n_neighbors,
             )
         if not get_distances:
-            return self.nearest_neighbors[(source_mesh, target_mesh)][0]
+            return self.nearest_neighbors[0]
 
-        return self.nearest_neighbors[(source_mesh, target_mesh)]
+        return self.nearest_neighbors
 
 
-def rotate_nodes_by_references(
-    references_xyz: NDArray,
-    nodes_xyz: NDArray,
-    zero_latitude: bool,
-    zero_longitude: bool,
-):
+def get_rotation_matrices(references_thetaphi, zero_latitude, zero_longitude):
     """
     Adapted from:
         Repo: https://github.com/google-deepmind/graphcast
         path: graphcast/model_utils.py
-    Compute senders' cartesian coordinates in a reference where receivers lat/lon
-    are set to 0 (theta=pi/2, phi=0)
+    Compute rotation matrices so that the references (theta, phi) become (pi/2, 0)
     """
     if not (zero_latitude or zero_longitude):
-        raise ValueError("zero longitude and/or latitude should be set!")
-    references_thetaphi = xyz_to_thetaphi(references_xyz)
-
+        raise ValueError(
+            "at least on of zero longitude and zero_latitude should be enabled"
+        )
     azimuthal_rotation = -references_thetaphi[:, 1]
 
-    if zero_longitude:
-        if zero_latitude:
+    if zero_latitude:
+        polar_rotation = np.pi / 2 - references_thetaphi[:, 0]
+        if zero_longitude:
             # first rotate on z, then on the new rotated y (not the absolute Y)
-            polar_rotation = np.pi / 2 - references_thetaphi[:, 0]
-            rotation_matrices = Rotation.from_euler(
+            return Rotation.from_euler(
                 "zy",
                 np.stack(
                     [azimuthal_rotation, polar_rotation],
                     axis=1,
                 ),
             ).as_matrix()
-        else:
-            # rotate on z
-            rotation_matrices = Rotation.from_euler("z", azimuthal_rotation).as_matrix()
-
-    else:
         # rotate on z, then on the new rotated, then undo z
-        polar_rotation = np.pi / 2 - references_thetaphi[:, 0]
-        rotation_matrices = Rotation.from_euler(
+        return Rotation.from_euler(
             "zyz",
             np.stack(
                 [azimuthal_rotation, polar_rotation, -azimuthal_rotation],
                 axis=1,
             ),
         ).as_matrix()
-    # this is faster than [:,None...] or matmul(mat,xyz)
-    return np.einsum("nij, nj-> ni", rotation_matrices, nodes_xyz)
+    # reaching here -> zero_longitude only
+    return Rotation.from_euler("z", azimuthal_rotation).as_matrix()
+
+
+def rotate_senders_by_receivers(
+    receivers_xyz: NDArray,
+    senders_xyz: NDArray,
+    zero_latitude: bool = False,
+    zero_longitude: bool = False,
+):
+    """
+    Apply rotation that zeroes out receivers' lat and/or lon to cartesian
+    senders' coordinates.
+    """
+    references_thetaphi = xyz_to_thetaphi(receivers_xyz)
+    rotation_matrices = get_rotation_matrices(
+        references_thetaphi,
+        zero_latitude=zero_latitude,
+        zero_longitude=zero_longitude,
+    )
+    # faster than expand_dims or matmul
+    return np.einsum("nij, nj-> ni", rotation_matrices, senders_xyz)
+
+
+def sender2receiver_edge_coords(sender_nodes, receiver_nodes, sender2receiver_edges):
+
+    # senders_xyz=sender_mesh.nodes[]
+    # receivers_xyz= grid.nodes[mesh2g_edges[:,1]]
+    # receiver_nodes = 0
+    # sender_nodes = 0
+    senders_wrt_receivers = rotate_senders_by_receivers(
+        receiver_nodes, sender_nodes, zero_latitude=True, zero_longitude=True
+    )
+    receivers_wrt_receivers = rotate_senders_by_receivers(
+        receiver_nodes, receiver_nodes, zero_latitude=True, zero_longitude=True
+    )

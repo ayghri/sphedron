@@ -136,7 +136,12 @@ def plot_2d_mesh(
     ax.add_feature(feature.LAND, facecolor="grey", alpha=0.5, edgecolor="black")
     ax.gridlines(draw_labels=True, linestyle="--", color="black", linewidth=0.5)
     if scatter:
-        ax.scatter(mesh.nodes_latlon[:, 1], mesh.nodes_latlon[:, 0], s=s)
+        ax.scatter(
+            mesh.nodes_latlon[:, 1],
+            mesh.nodes_latlon[:, 0],
+            s=s,
+            transform=ccrs.PlateCarree(),
+        )
     ax.set_xlim(-180, 180)
     ax.set_ylim(-90, 90)
     plt.title(title)

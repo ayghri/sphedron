@@ -6,7 +6,6 @@ Non-commercial use.
 from typing import List, Tuple, Type
 from numpy.typing import NDArray
 import numpy as np
-from scipy.spatial import cKDTree  # pyright: ignore
 import trimesh
 
 
@@ -14,6 +13,7 @@ from .utils import rotate_nodes
 from .utils import xyz_to_latlon
 from .utils import latlon_to_xyz
 from .utils import faces_to_edges
+from .utils import query_nearest
 
 
 class Mesh:
@@ -22,7 +22,7 @@ class Mesh:
     Each face is a triangle of 3 nodes
     """
 
-    rotation_angles = 0.0
+    rotation_angle = 0.0
     rotation_axes = "x"
 
     def __init__(self, nodes, faces, rotate: bool = False):
@@ -31,11 +31,11 @@ class Mesh:
             nodes = rotate_nodes(
                 nodes,
                 axis=self.rotation_axes,
-                angles=self.rotation_angles,
+                angle=self.rotation_angle,
             )
         self._all_nodes = nodes
         self._all_faces = faces
-        self._nodes_to_keep: NDArray  # indices of nodes to be included
+        self._nodes_to_keep: NDArray  # boolean mask for nodes to be kept
         self.reset()
 
     @staticmethod
@@ -102,10 +102,6 @@ class Mesh:
         return xyz_to_latlon(self.nodes)
 
     @property
-    def triangles(self):
-        raise NotImplementedError
-
-    @property
     def num_edges(self):
         return self.edges.shape[0]
 
@@ -118,7 +114,16 @@ class Mesh:
     def num_nodes(self):
         return np.sum(self._nodes_to_keep)
 
-    def triangle_face_index(self, triangle_idx):
+    @property
+    def triangles(self):
+        raise NotImplementedError
+
+    def triangle2face_index(self, triangle_idx):
+        """Convert triangle index to face index, identity for triangle based meshes"""
+        raise NotImplementedError
+
+    def face2triangle_index(self, face_idx):
+        """Convert face index to triangle index, identity for triangle based meshes"""
         raise NotImplementedError
 
     def mask_nodes(self, nodes_mask: NDArray[np.bool_]):
@@ -145,62 +150,41 @@ class Mesh:
         mesh.fix_normals()
         return mesh
 
-    def radius_query_edges(
-        self,
-        target_mesh: "Mesh",
-        radius: float,
-    ) -> NDArray[np.int_]:
-        """
-        Return the edges (i,j) where i is the index of the source mesh node s_i
-        and j the index of the current mesh node t_j such that s_i is within radius of
-        t_j.
-        """
-        current_indices = cKDTree(target_mesh.nodes).query_ball_point(
-            x=self.nodes,
-            r=radius,
-        )
-        current_to_target_edges = []
-        for current_v, target_nodes in enumerate(current_indices):
-            for target_v in target_nodes:
-                current_to_target_edges.append((current_v, target_v))
-        return np.array(current_to_target_edges)
-
-    def triangle_query_edges(self, target_mesh: "Mesh") -> NDArray:
-        """Returns current(source)-target edge indices where each target node is connected
-        to the nodes of the nearest triangle from the current mesh
-        Args:
-            target_mesh: ...
-        Returns:
-            np.array of shape (target_mesh.num_nodes*3, 2) containing the edges
-        """
-
-        current_trimesh = self.build_trimesh()
-        target_nodes = target_mesh.nodes
-        _, _, query_face_indices = trimesh.proximity.closest_point(
-            current_trimesh, target_nodes
+    def query_edges_from_faces(self, receiver_mesh: "Mesh") -> NDArray:
+        sender_trimesh = self.build_trimesh()
+        receiver_nodes = receiver_mesh.nodes
+        _, _, query_triangle_indices = trimesh.proximity.closest_point(
+            sender_trimesh, receiver_nodes
         )
 
-        nearest_triangles = self.triangles[query_face_indices]
+        nearest_faces = self.faces[self.triangle2face_index(query_triangle_indices)]
 
-        target_nodes = np.tile(np.arange(target_nodes.shape[0])[:, None], (1, 3))
-        return np.stack(
-            [nearest_triangles[..., None], target_nodes[..., None]], axis=-1
+        receiver_nodes = np.tile(
+            np.arange(receiver_nodes.shape[0])[:, None], (1, nearest_faces.shape[1])
+        )
+        return np.concatenate(
+            [nearest_faces[..., None], receiver_nodes[..., None]], axis=-1
         ).reshape(-1, 2)
+
+    def query_edges_from_neighbors(
+        self,
+        receiver_mesh: "Mesh",
+        radius: float = -1.0,
+        n_neighbors: int = -1,
+    ):
+        nearest_senders = query_nearest(
+            self.nodes, receiver_mesh.nodes, radius=radius, n_neighbors=n_neighbors
+        )[0]
+        s2r_edges = []
+        for s_is, r_i in zip(nearest_senders, range(receiver_mesh.num_nodes)):
+            for s_i in s_is:
+                s2r_edges.append([s_i, r_i])
+        return np.array(s2r_edges)
 
 
 class NestedMeshes(Mesh):
     """
-    A class to create a stratified icosphere mesh.
-
-    This class generates a mesh composed of multiple icospheres at specified depths,
-    allowing for stratification of the geometry. The total mesh is the concatenation
-    of all levels.
-
-    Parameters:
-    factors (List[int]): A list of integer factors for the icosphere refinement,
-        all factors shoud be > 1
-
-    rotate (bool): A flag indicating whether to rotate the icospheres (default is True).
+    A class to create nested meshes, where self.mesh[i+1] is a refined self.meshes[i]
     """
 
     base_mesh_cls: Type[Mesh]
@@ -254,12 +238,6 @@ class NestedMeshes(Mesh):
         return np.concatenate([mesh.faces for mesh in self.meshes], axis=0)
 
     def mask_nodes(self, nodes_mask: NDArray[np.bool_]):
-        """
-        Mask the nodes associated with nodes_mask[i]==True
-        Expects a boolean mask of num_nodes size.
-        Does not unmask previously masked nodes
-        """
-
         if nodes_mask.shape[0] != self.num_nodes:
             raise ValueError(
                 f"Nodes mask should have num_nodes={self.num_nodes} entries"
@@ -268,7 +246,7 @@ class NestedMeshes(Mesh):
             mesh.mask_nodes(nodes_mask[: mesh.num_nodes])
 
 
-class VerticesOnlyMesh(Mesh):
+class NodesOnlyMesh(Mesh):
     def __init__(self, nodes_latlon):
         super().__init__(
             latlon_to_xyz(nodes_latlon),
@@ -276,7 +254,7 @@ class VerticesOnlyMesh(Mesh):
         )
 
 
-class UniformMesh(VerticesOnlyMesh):
+class UniformMesh(NodesOnlyMesh):
     def __init__(self, resolution=1.0):
         multiplier_long = int(180.0 / resolution)
         multiplier_lat = int(90.0 / resolution)
@@ -288,19 +266,3 @@ class UniformMesh(VerticesOnlyMesh):
         super().__init__(uniform_coords)
         self.uniform_long = uniform_long
         self.uniform_lat = uniform_lat
-
-    # def mask_faces(self, faces_mask: NDArray[np.bool_]):
-    #     """
-    #     Mask faces and their nodes, if the nodes are not associated with other faces
-    #     """
-    #     if faces_mask.shape[0] != self.num_faces:
-    #         raise ValueError(
-    #             f"Faces mask should have num_faces={self.num_faces} entries"
-    #         )
-    #     # self.faces_mask = self.faces_mask[np.logical_not(faces_mask)]
-    #     # self.nodes_mask = np.unique(self._all_faces[self.faces_mask])
-    #     # nodes_mask =
-    #     retained_nodes = np.unique(self.faces[~faces_mask])
-    #     nodes_mask = np.ones(self.num_nodes, dtype=bool)
-    #     nodes_mask[retained_nodes] = False
-    #     self.mask_nodes(nodes_mask)

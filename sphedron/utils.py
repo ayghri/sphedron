@@ -1,8 +1,8 @@
 from typing import Literal, Tuple
 from numpy.typing import NDArray
 import numpy as np
-from sklearn.neighbors import NearestNeighbors
 from scipy.spatial.transform import Rotation
+from scipy.spatial import cKDTree
 
 
 def faces_to_edges(faces: NDArray):
@@ -517,50 +517,37 @@ def compute_edges_angles(
     return angles_between_vertices
 
 
-def find_nearest_nodes(
-    reference_xyz: NDArray,
-    target_xyz: NDArray,
+def query_nearest(
+    references_xyz: NDArray,
+    nodes_xyz: NDArray,
     n_neighbors: int = -1,
     radius: float = -1.0,
 ) -> Tuple[NDArray, NDArray]:
     """
-    Transpose a grid by finding the nearest neighbors of target points
-    among the reference points based on geographic coordinates.
-
-    Parameters:
-    reference_xyz: of shape (R, 3), containing the coordinates of references.
-    target_xyz: of shape (T, 3), containing the coordinates of targets.
-    n_neighbors: Number of nearest neighbors. Must be negative if radius > 0.
-        Default is -1.
-    radius: The radius within which to search for neighbors. Negative if n_neighbors>0.
-        Default is -1.0.
+    Return the list of indices so that references_xyz[indices[j]] are the all n_neighbors
+    or all points within radius r from nodes_xyz[j]
 
     Returns:
-    Tuple[NDArray, NDArray]: A tuple containing:
-        - nearest_indices (NDArray)  : Indices of the nearest reference points,
-                                            shape (T,nearest_indices)
-        - nearest_distances (NDArray): Distances to the nearest neighbors,
-                                            shape (T,nearest_indices)
+        Array of arrays, internal arrays are not necessarily of the same length when
+        querying the radius
     """
     # either n_neighbors or radius should be used but not both
-    assert n_neighbors * radius < 0
+    # assert n_neighbors * radius < 0
     if radius > 0:
-        mode = "radius"
-        n_neighbors = 5
+        indices = cKDTree(references_xyz).query_ball_point(
+            x=nodes_xyz, r=radius, workers=-1
+        )
     else:
-        mode = "count"
-        radius = 1.0
+        if n_neighbors < 0:
+            raise ValueError(
+                "Either radius or n_neighbors should be provided,"
+                f"(n_neighbors, radius)=({n_neighbors}, {radius})  "
+            )
 
-    neigh = NearestNeighbors(
-        n_neighbors=n_neighbors, metric="cosine", radius=radius
-    ).fit(reference_xyz)
-
-    if mode == "count":
-        nearest_distances, nearest_indices = neigh.kneighbors(target_xyz)
-    else:
-        nearest_distances, nearest_indices = neigh.radius_neighbors(target_xyz)
-
-    return (nearest_indices, nearest_distances)
+        _, indices = cKDTree(references_xyz).query(
+            x=nodes_xyz, k=n_neighbors, workers=-1
+        )
+    return indices
 
 
 def rotate_nodes(nodes: NDArray, axis: str, angle: float):

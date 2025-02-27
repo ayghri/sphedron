@@ -7,5 +7,5 @@ from .cube import NestedCubespheres
 from .octasphere import NestedOctaspheres
 
 from .extra import get_land_mask
-from .transform import rotate_nodes_by_references
+from .transform import rotate_senders_by_receivers
 from .transform import MeshTransfer
