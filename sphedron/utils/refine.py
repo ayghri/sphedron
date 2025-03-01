@@ -1,6 +1,14 @@
 """
-Ayoub Ghriss, ayoub.ghriss@colorado.edu
-Non-commercial use.
+Author: Ayoub Ghriss, dev@ayghri.com
+Date: 2024
+
+License: Non-Commercial Use Only
+
+Permission is granted to use, copy, modify, and distribute this software
+for non-commercial purposes only, with attribution to the original author.
+Commercial use requires explicit permission.
+
+This software is provided "as is", without warranty of any kind.
 """
 
 from typing import Tuple, Literal
@@ -8,43 +16,56 @@ from numpy.typing import NDArray
 import numpy as np
 
 
-def split_edges(edge_extremes: NDArray, num_segments: int, use_angle: bool = False):
+def split_edges(
+    edge_extremes: NDArray, num_segments: int, use_angle: bool = False
+):
     """
-    Given an array of E pairs of extremities, returns the new points that
-    are equally distanced by edge_length/num_segments. (num_segments=1 return nothing)
-    When the extremities are located on the sphere, we can split so that the new points
-    are equally distanced by angle (to the normalized points are equally distance)
+    Splits edges defined by pairs of extremities into equally spaced points.
+
+    Given an array of E pairs of extremities, this function returns new points
+    that are equally distanced by edge_length/num_segments. If num_segments is
+    set to 1, the function returns an empty array. When the extremities are
+    located on a sphere, the new points can be split so that they are equally
+    distanced by angle when use_angle is set to True, ensuring that the
+    normalized points are also equally spaced.
 
     Args:
-        edge_nodes:  extremities of shape (E,2,3)
-       num_segments: int,
-        use_angle: bool, set to true if the new points should be equally distanced
-            by angle
+        edge_extremes: Extremities of shape (E, 2, 3).
+        num_segments: Number of segments to split the edges into.
+        use_angle: If set to True, the new points will be equally distanced
+            by angle (arc length).
+
     Returns:
-        Array of shape (E*(num_segments-1), 3)
+        Array of shape (E * (num_segments - 1), 3) containing the new points.
     """
     if num_segments <= 1:
         return np.array([])
     t = np.arange(1, num_segments) / num_segments
     if use_angle:
         # shape (E,)
-        omegas = np.arccos(np.sum(edge_extremes[:, 0] * edge_extremes[:, 1], axis=-1))
+        omegas = np.arccos(
+            np.sum(edge_extremes[:, 0] * edge_extremes[:, 1], axis=-1)
+        )
         sin_om = np.sin(omegas)[:, None]
         u = np.sin(omegas[:, None] * (1 - t[None, :]))
         v = np.sin(omegas[:, None] * t[None, :]) / sin_om
         u = u[:, :, None]  # shape (E,num_segments-1, 1)
         v = v[:, :, None]  # shape (E,num_segments-1, 1)
     else:
-        v = t[None, :, None]  # interpolation weights, shape (1, num_segments-1, 1)
+        v = t[
+            None, :, None
+        ]  # interpolation weights, shape (1, num_segments-1, 1)
         u = 1 - v
 
     nodes_on_edges = u * edge_extremes[:, [0]]  # shape (E,ns,3)
-    nodes_on_edges = nodes_on_edges + v * edge_extremes[:, [1]]  # shape(E,ns-1,3)
+    nodes_on_edges = (
+        nodes_on_edges + v * edge_extremes[:, [1]]
+    )  # shape(E,ns-1,3)
     nodes_on_edges = nodes_on_edges.reshape(-1, 3)
     return nodes_on_edges
 
 
-def triangle_refine(
+def refine_triangles(
     nodes: NDArray,
     triangles: NDArray,
     factor: int,
@@ -52,25 +73,31 @@ def triangle_refine(
 ) -> Tuple[NDArray, NDArray]:
     """
     Adapted from https://github.com/vedranaa/icosphere
-    Given a base mesh, refine it using 1/depth factor
+
+    Given a base mesh of triangular faces, refine it using a depth factor.
 
     Args:
-        nodes (array): [TODO:description]
-        faces (array): [TODO:description]
-        depth (array): [TODO:description]
+        nodes: coordinates representing the mesh nodes, shape (N,3)
+        triangles: Indices of each face's nodes, shape (T,3)
+        factor: refinement factor that reflects the depth of
+            subdivision.
+        use_angle: A boolean flag indicating whether to use angle-based
+            refinement. See split_edges
 
     Returns:
-        Vertices and faces of the refined mesh
+        A tuple containing:
+            - An array of nodes of the refined mesh, shape (TODO)
+            - An array of triangles of the refined mesh. shape (TODO)
     """
     if factor <= 1:
         return nodes, triangles
     # shape [E, 3], where E = F * 3
     edges = np.concatenate(
-        [triangles[:, [0, 1]], triangles[:, [1, 2]], triangles[:, [0, 2]]], axis=0
+        [triangles[:, [0, 1]], triangles[:, [1, 2]], triangles[:, [0, 2]]],
+        axis=0,
     )
 
     # sort in alphabetic order and remove duplicates
-    # WARN: shape (2,E)
     edges = np.unique(np.sort(edges, axis=1), axis=0)
     n_triangles = triangles.shape[0]
     n_nodes = nodes.shape[0]
@@ -130,7 +157,11 @@ def triangle_refine(
         sorted_ac = (edge_index[e_ac] * (factor - 1) + r)[:: e_direction(e_ac)]
         sorted_bc = (edge_index[e_bc] * (factor - 1) + r)[:: e_direction(e_bc)]
         sorted_nodes = np.r_[
-            triangles[triangle_idx], sorted_ab, sorted_ac, sorted_bc, triangle_nodes
+            triangles[triangle_idx],
+            sorted_ab,
+            sorted_ac,
+            sorted_bc,
+            triangle_nodes,
         ]  # nodes in template order
         # sort nodes in ordering
         sub_triangles[
@@ -173,7 +204,9 @@ def triangle_template(nu: int) -> NDArray[np.int64]:
         vertex0 = i * (i + 1) // 2
         skip = i + 1
         for j in range(i):  # adding pairs of triangles, will not run for i==0
-            faces.append([j + vertex0, j + vertex0 + skip, j + vertex0 + skip + 1])
+            faces.append(
+                [j + vertex0, j + vertex0 + skip, j + vertex0 + skip + 1]
+            )
             faces.append([j + vertex0, j + vertex0 + skip + 1, j + vertex0 + 1])
         # adding the last (unpaired, rightmost) triangle
         faces.append([i + vertex0, i + vertex0 + skip, i + vertex0 + skip + 1])
@@ -216,7 +249,7 @@ def triangles_order(nu: int):
 
 def triangle_interior(ab: NDArray, ac: NDArray, use_angle: bool = False):
     """
-    Returns coordinates of the inside (on-face) nodes (marked by star) for subdivision
+    Returns coordinates of the inside nodes (marked by star) for subdivision
     of the face ABC when given coordinates of the on-edge nodesAB[i] and AC[i].                     
              A
             / \
@@ -253,12 +286,12 @@ def triangle_interior(ab: NDArray, ac: NDArray, use_angle: bool = False):
     return all_nodes
 
 
-def square_refine(
+def refine_rectrangles(
     nodes: NDArray,
-    squares: NDArray,
+    rectangles: NDArray,
     factor: int,
     use_length: bool = True,
-    # normalize: bool = True,
+    use_angle: bool = False,
 ) -> Tuple[NDArray, NDArray]:
     """
     Adapted from https://github.com/vedranaa/icosphere
@@ -273,14 +306,14 @@ def square_refine(
         Vertices and faces of the refined mesh
     """
     if factor <= 1:
-        return nodes, squares
+        return nodes, rectangles
     # shape [E, 3], where E = F * 3
     edges = np.concatenate(
         [
-            squares[:, [0, 1]],
-            squares[:, [1, 2]],
-            squares[:, [2, 3]],
-            squares[:, [3, 0]],
+            rectangles[:, [0, 1]],
+            rectangles[:, [1, 2]],
+            rectangles[:, [2, 3]],
+            rectangles[:, [3, 0]],
         ],
         axis=0,
     )
@@ -288,7 +321,7 @@ def square_refine(
     # sort in alphabetic order and remove duplicates
     # shape (E,2)
     edges = np.unique(np.sort(edges, axis=1), axis=0)
-    num_squares = squares.shape[0]
+    num_squares = rectangles.shape[0]
     num_nodes = nodes.shape[0]
     num_edges = edges.shape[0]
     subsquares = np.empty((num_squares * factor**2, 4), dtype=int)
@@ -316,7 +349,7 @@ def square_refine(
     nodes_on_edges = split_edges(
         edge_extremes,
         num_segments=factor,
-        use_angle=use_length,
+        use_angle=use_angle,
     )
     # Step 1: e add (depth-1) nodes per edge
     new_nodes[num_nodes : num_nodes + num_edges * (factor - 1)] = nodes_on_edges
@@ -330,19 +363,32 @@ def square_refine(
         # nodes invoved in this subface: original, on-edges and on-faces.
         # T containes the indices of on-faces nodes
         square_nodes = ref_square + f * num_inside_nodes
-        e_ab = squares[f, [0, 1]]
-        e_bc = squares[f, [1, 2]]
-        e_cd = squares[f, [2, 3]]
-        e_ad = squares[f, [0, 3]]
+        e_ab = rectangles[f, [0, 1]]
+        e_bc = rectangles[f, [1, 2]]
+        e_cd = rectangles[f, [2, 3]]
+        e_ad = rectangles[f, [0, 3]]
         # -- Already added in Step 1
         # Sorting the nodes on edges in the right order
-        sorted_ab = (edge_index[tuple(e_ab)] * (factor - 1) + r)[:: e_direction(e_ab)]
-        sorted_bc = (edge_index[tuple(e_bc)] * (factor - 1) + r)[:: e_direction(e_bc)]
-        sorted_cd = (edge_index[tuple(e_cd)] * (factor - 1) + r)[:: e_direction(e_cd)]
-        sorted_ad = (edge_index[tuple(e_ad)] * (factor - 1) + r)[:: e_direction(e_ad)]
+        sorted_ab = (edge_index[tuple(e_ab)] * (factor - 1) + r)[
+            :: e_direction(e_ab)
+        ]
+        sorted_bc = (edge_index[tuple(e_bc)] * (factor - 1) + r)[
+            :: e_direction(e_bc)
+        ]
+        sorted_cd = (edge_index[tuple(e_cd)] * (factor - 1) + r)[
+            :: e_direction(e_cd)
+        ]
+        sorted_ad = (edge_index[tuple(e_ad)] * (factor - 1) + r)[
+            :: e_direction(e_ad)
+        ]
         # --
         sorted_nodes = np.r_[
-            squares[f], sorted_ab, sorted_ad, sorted_bc, sorted_cd, square_nodes
+            rectangles[f],
+            sorted_ab,
+            sorted_ad,
+            sorted_bc,
+            sorted_cd,
+            square_nodes,
         ]
         subsquares[f * factor**2 : (f + 1) * factor**2, :] = sorted_nodes[
             reordered_template
@@ -423,8 +469,9 @@ def squares_order(nu: int):
 
 def square_interior(ad: NDArray, bc: NDArray, use_length: bool = True):
     """
-     Returns coordinates of the inside (on-face) nodes (marked by star) for subdivision
-     of the face ABCC when given coordinates of the on-edge nodes AD[i] and BC[i].
+     Returns coordinates of the inside nodes (marked by star) for subdivision
+     of the face ABCD when given coordinates of the on-edge nodes AD[i]
+     and BC[i].
      These should be returned in the correct order as in squares_order
 
      demo for depth 4
@@ -442,7 +489,7 @@ def square_interior(ad: NDArray, bc: NDArray, use_length: bool = True):
          AD: ndarray, shape(depth-1,3)
          BC: ndarray, shape(depth-1,3)
      Returns:
-         [TODO:return]
+         ndarray of inside nodes, shape ((depth-1)**2, 3)
     """
     assert ad.shape[0] == bc.shape[0]
     extremities = np.concatenate([ad[:, None], bc[:, None]], axis=1)
@@ -454,13 +501,11 @@ def square_interior(ad: NDArray, bc: NDArray, use_length: bool = True):
 
 
 def e_direction(edge) -> Literal[-1, 1]:
-    """
-    Parameters
-    ----------
-    edge : Tuple, containing the indices of the edge nodes
+    """Determines the direction of an edge based on its node indices.
 
-    Returns
-    -------
-        -1 if edge[0]>edges[1] and 1 otherwise
+    Args:
+        edge: A tuple containing the indices of the edge nodes.
+    Returns:
+        -1 if edge[0] > edge[1], 1 otherwise.
     """
     return 1 - 2 * (edge[0] > edge[1])
