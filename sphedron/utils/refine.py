@@ -52,15 +52,13 @@ def split_edges(
         u = u[:, :, None]  # shape (E,num_segments-1, 1)
         v = v[:, :, None]  # shape (E,num_segments-1, 1)
     else:
-        v = t[
-            None, :, None
-        ]  # interpolation weights, shape (1, num_segments-1, 1)
+        # interpolation weights, shape (1, num_segments-1, 1)
+        v = t[None, :, None]
         u = 1 - v
-
-    nodes_on_edges = u * edge_extremes[:, [0]]  # shape (E,ns,3)
-    nodes_on_edges = (
-        nodes_on_edges + v * edge_extremes[:, [1]]
-    )  # shape(E,ns-1,3)
+    # shape (E,ns-1,3)
+    nodes_on_edges = u * edge_extremes[:, 0][:, None]
+    # shape (E,ns-1,3)
+    nodes_on_edges = nodes_on_edges + v * edge_extremes[:, 1][:, None]
     nodes_on_edges = nodes_on_edges.reshape(-1, 3)
     return nodes_on_edges
 
@@ -74,12 +72,12 @@ def refine_triangles(
     """
     Adapted from https://github.com/vedranaa/icosphere
 
-    Given a base mesh of triangular faces, refine it using a depth factor.
+    Given a base mesh of triangular faces, refine it using a factor factor.
 
     Args:
         nodes: coordinates representing the mesh nodes, shape (N,3)
         triangles: Indices of each face's nodes, shape (T,3)
-        factor: refinement factor that reflects the depth of
+        factor: refinement factor that reflects the factor of
             subdivision.
         use_angle: A boolean flag indicating whether to use angle-based
             refinement. See split_edges
@@ -108,7 +106,7 @@ def refine_triangles(
             nodes,
             np.empty(
                 (
-                    n_edges * (factor - 1)  # Vertices on edges
+                    n_edges * (factor - 1)  # Nodes on edges
                     + n_triangles
                     * (factor - 1)
                     * (factor - 2)
@@ -136,28 +134,30 @@ def refine_triangles(
         num_segments=factor,
         use_angle=use_angle,
     )
-    # Step 1: e add (depth-1) nodes per edge
+    # Step 1: e add (factor-1) nodes per edge
     new_nodes[n_nodes : n_nodes + n_edges * (factor - 1)] = nodes_on_edges
 
     r = np.arange(factor - 1) + n_nodes
     start_idx = n_edges * (factor - 1) + n_nodes
     num_inside_nodes = (factor - 1) * (factor - 2) // 2
     ref_triangle = np.arange(start_idx, num_inside_nodes + start_idx)
+
     for triangle_idx in range(n_triangles):
         # First, fixing connectivity. We get hold of the indices of all
         # nodes invoved in this subface: original, on-edges and on-faces.
         triangle_nodes = ref_triangle + triangle_idx * num_inside_nodes
-        e_ab = (triangles[triangle_idx, 0], triangles[triangle_idx, 1])
-        e_ac = (triangles[triangle_idx, 0], triangles[triangle_idx, 2])
-        e_bc = (triangles[triangle_idx, 1], triangles[triangle_idx, 2])
+        triangle = triangles[triangle_idx]
+        e_ab = (triangle[0], triangle[1])
+        e_ac = (triangle[0], triangle[2])
+        e_bc = (triangle[1], triangle[2])
         # -- Already added in Step 1
         # Sorting the nodes on edges in the right order
-        # making sure edge is oriented from lower to higher vertex index
+        # making sure edge is oriented from lower to higher node index
         sorted_ab = (edge_index[e_ab] * (factor - 1) + r)[:: e_direction(e_ab)]
         sorted_ac = (edge_index[e_ac] * (factor - 1) + r)[:: e_direction(e_ac)]
         sorted_bc = (edge_index[e_bc] * (factor - 1) + r)[:: e_direction(e_bc)]
         sorted_nodes = np.r_[
-            triangles[triangle_idx],
+            triangle,
             sorted_ab,
             sorted_ac,
             sorted_bc,
@@ -183,7 +183,7 @@ def triangle_template(nu: int) -> NDArray[np.int64]:
     """
     Template for linking subfaces                  0
     in a subdivision of a face.                   / \
-    Returns faces with vertex                    1---2
+    Returns faces with node                      1---2
     indexing given by reading order.            / \\/ \
                                                3---4---5
                                               / \\/ \\/ \
@@ -192,7 +192,7 @@ def triangle_template(nu: int) -> NDArray[np.int64]:
                                            10--11--12--13--14
 
     Args:
-        nu (int): depth for which to generate the faces template
+        nu (int): factor for which to generate the faces template
 
     Returns:
         return faces template of shape $(nu^2 , 3)$
@@ -201,15 +201,14 @@ def triangle_template(nu: int) -> NDArray[np.int64]:
     faces = []
     # looping in layers of triangles
     for i in range(nu):
-        vertex0 = i * (i + 1) // 2
+        node0 = i * (i + 1) // 2
         skip = i + 1
-        for j in range(i):  # adding pairs of triangles, will not run for i==0
-            faces.append(
-                [j + vertex0, j + vertex0 + skip, j + vertex0 + skip + 1]
-            )
-            faces.append([j + vertex0, j + vertex0 + skip + 1, j + vertex0 + 1])
+        # adding pairs of triangles, will not run for i==0
+        for j in range(i):
+            faces.append([j + node0, j + node0 + skip, j + node0 + skip + 1])
+            faces.append([j + node0, j + node0 + skip + 1, j + node0 + 1])
         # adding the last (unpaired, rightmost) triangle
-        faces.append([i + vertex0, i + vertex0 + skip, i + vertex0 + skip + 1])
+        faces.append([i + node0, i + node0 + skip, i + node0 + skip + 1])
 
     return np.array(faces)
 
@@ -217,16 +216,16 @@ def triangle_template(nu: int) -> NDArray[np.int64]:
 def triangles_order(nu: int):
     """
     Permutation for ordering of                 0
-    face nodes which transformes            / \
+    face nodes which transformes               / \
     reading-order indexing into indexing      3---6
-    first corners nodes, then on-edges    / \\/ \
-    nodes, and then on-face nodes     4---12--7
+    first corners nodes, then on-edges       / \\/ \
+    nodes, and then on-face nodes           4---12--7
     (as illustrated).                      / \\/ \\/ \
                                           5---13--14--8
                                          / \\/ \\/ \\/ \\
                                         1---9--10--11---2
     Args:
-        nu (int): depth for which to generate the ordering
+        nu (int): factor for which to generate the ordering
 
     Returns:
         return ordering of length $(nu+1)(nu+2)/2$
@@ -266,8 +265,8 @@ def triangle_interior(ab: NDArray, ac: NDArray, use_angle: bool = False):
         AC (array): [TODO:description]
         use_angle (float): 
 
-    vAB: ndarray, shape(depth-2,3)
-    vAC: ndarray, shape(depth-2,3)
+    vAB: ndarray, shape(factor-2,3)
+    vAC: ndarray, shape(factor-2,3)
     Returns:
         [TODO:return]
     """
@@ -295,15 +294,15 @@ def refine_rectrangles(
 ) -> Tuple[NDArray, NDArray]:
     """
     Adapted from https://github.com/vedranaa/icosphere
-    Given a base mesh, refine it using 1/depth factor
+    Given a base mesh, refine it using 1/factor factor
 
     Args:
         nodes (array): [TODO:description]
         faces (array): [TODO:description]
-        depth (array): [TODO:description]
+        factor (array): [TODO:description]
 
     Returns:
-        Vertices and faces of the refined mesh
+        Nodes and faces of the refined mesh
     """
     if factor <= 1:
         return nodes, rectangles
@@ -321,15 +320,15 @@ def refine_rectrangles(
     # sort in alphabetic order and remove duplicates
     # shape (E,2)
     edges = np.unique(np.sort(edges, axis=1), axis=0)
-    num_squares = rectangles.shape[0]
+    num_rects = rectangles.shape[0]
     num_nodes = nodes.shape[0]
     num_edges = edges.shape[0]
-    subsquares = np.empty((num_squares * factor**2, 4), dtype=int)
+    subrects = np.empty((num_rects * factor**2, 4), dtype=int)
     new_nodes = np.empty(
         (
             num_nodes
-            + num_edges * (factor - 1)  # Vertices on edges
-            + num_squares * (factor - 1) ** 2,  # nodes on faces, 1 if factor=2
+            + num_edges * (factor - 1)  # Nodes on edges
+            + num_rects * (factor - 1) ** 2,  # nodes on faces, 1 if factor=2
             3,
         )
     )
@@ -341,32 +340,33 @@ def refine_rectrangles(
         edge_index[tuple(edges[i])] = i
         edge_index[tuple(edges[i][::-1])] = i
 
-    template = square_template(factor)
-    ordering = squares_order(factor)
+    template = rectangle_template(factor)
+    ordering = rectangles_order(factor)
     reordered_template = ordering[template]
 
     edge_extremes = nodes[edges]  # shape (E,2,3)
-    nodes_on_edges = split_edges(
+    # Step 1: e add (factor-1) on-edges nodes per edge
+    new_nodes[num_nodes : num_nodes + num_edges * (factor - 1)] = split_edges(
         edge_extremes,
         num_segments=factor,
         use_angle=use_angle,
     )
-    # Step 1: e add (depth-1) nodes per edge
-    new_nodes[num_nodes : num_nodes + num_edges * (factor - 1)] = nodes_on_edges
+
     r = np.arange(factor - 1) + num_nodes
     start_idx = num_edges * (factor - 1) + num_nodes
     num_inside_nodes = (factor - 1) ** 2
     # this will be offset later as indices for the nodes on edges
-    ref_square = np.arange(start_idx, num_inside_nodes + start_idx)
-    for f in range(num_squares):
+    ref_rect = np.arange(start_idx, num_inside_nodes + start_idx)
+    for f in range(num_rects):
         # First, fixing connectivity. We get hold of the indices of all
         # nodes invoved in this subface: original, on-edges and on-faces.
-        # T containes the indices of on-faces nodes
-        square_nodes = ref_square + f * num_inside_nodes
-        e_ab = rectangles[f, [0, 1]]
-        e_bc = rectangles[f, [1, 2]]
-        e_cd = rectangles[f, [2, 3]]
-        e_ad = rectangles[f, [0, 3]]
+        # rect_nodes containes the indices of on-faces nodes
+        rect_nodes = ref_rect + f * num_inside_nodes
+        rectangle = rectangles[f]
+        e_ab = rectangle[0, 1]
+        e_bc = rectangle[1, 2]
+        e_cd = rectangle[2, 3]
+        e_ad = rectangle[0, 3]
         # -- Already added in Step 1
         # Sorting the nodes on edges in the right order
         sorted_ab = (edge_index[tuple(e_ab)] * (factor - 1) + r)[
@@ -388,13 +388,13 @@ def refine_rectrangles(
             sorted_ad,
             sorted_bc,
             sorted_cd,
-            square_nodes,
+            rect_nodes,
         ]
-        subsquares[f * factor**2 : (f + 1) * factor**2, :] = sorted_nodes[
+        subrects[f * factor**2 : (f + 1) * factor**2, :] = sorted_nodes[
             reordered_template
         ]
         # Now geometry, computing positions of face nodes.
-        new_nodes[square_nodes, :] = square_interior(
+        new_nodes[rect_nodes, :] = rectangle_interior(
             new_nodes[sorted_ad, :],
             new_nodes[sorted_bc, :],
             use_length=use_length,
@@ -402,14 +402,14 @@ def refine_rectrangles(
     # normalize nodes to position them on the unit sphere
     new_nodes = new_nodes / np.linalg.norm(new_nodes, axis=1, keepdims=True)
 
-    return (new_nodes, subsquares)
+    return (new_nodes, subrects)
 
 
-def square_template(nu: int) -> NDArray[np.int64]:
+def rectangle_template(nu: int) -> NDArray[np.int64]:
     """
     Template for linking subfaces    0===1===2===3
     in a subdivision of a face.      |   |   |   |
-    Returns faces with vertex        4===5===6===7
+    Returns faces with node          4===5===6===7
     indexing given by reading order. |   |   |   |
                                      8===9==10==11
                                      |   |   |   |
@@ -418,14 +418,14 @@ def square_template(nu: int) -> NDArray[np.int64]:
 
 
     Args:
-        nu (int): depth for which to generate the faces template
+        nu (int): factor for which to generate the faces template
 
     Returns:
         return faces template of shape $(nu^2 , 3)$
     """
 
     faces = []
-    # looping in layers of squares
+    # looping in layers of rectangles
     for i in range(nu):
         row0 = i * (nu + 1)  # start 0, 4, 8
         row1 = (i + 1) * (nu + 1)  # start at 4, 8, 12
@@ -435,17 +435,17 @@ def square_template(nu: int) -> NDArray[np.int64]:
     return np.array(faces)
 
 
-def squares_order(nu: int):
+def rectangles_order(nu: int):
     """
     Permutation for ordering of           0==4===5===1
-    face nodes which transformes       |  |   |   |
+    face nodes which transformes          |  |   |   |
     reading-order indexing into indexing  6==12==13==8
-    first corners nodes, then on-edges |  |   |   |
-    nodes, and then on-face nodes   7==14==15==9
+    first corners nodes, then on-edges    |  |   |   |
+    nodes, and then on-face nodes         7==14==15==9
     (as illustrated).                     |  |   |   |
                                           3==11==10==2
     Args:
-        nu (int): depth for which to generate the ordering
+        nu (int): factor for which to generate the ordering
 
     Returns:
         return ordering of length $(nu+1)**2$
@@ -467,14 +467,14 @@ def squares_order(nu: int):
     return np.array(order)
 
 
-def square_interior(ad: NDArray, bc: NDArray, use_length: bool = True):
+def rectangle_interior(ad: NDArray, bc: NDArray, use_length: bool = True):
     """
      Returns coordinates of the inside nodes (marked by star) for subdivision
      of the face ABCD when given coordinates of the on-edge nodes AD[i]
      and BC[i].
-     These should be returned in the correct order as in squares_order
+     These should be returned in the correct order as in rectangles_order
 
-     demo for depth 4
+     demo for factor 4
      A==AB0==AB1==AB2==B
      |   |    |    |   |
     AD0==*====*====*==BC0
@@ -486,10 +486,10 @@ def square_interior(ad: NDArray, bc: NDArray, use_length: bool = True):
      D==DC0==DC1==DC2==C
 
      Args:
-         AD: ndarray, shape(depth-1,3)
-         BC: ndarray, shape(depth-1,3)
+         AD: ndarray, shape(factor-1,3)
+         BC: ndarray, shape(factor-1,3)
      Returns:
-         ndarray of inside nodes, shape ((depth-1)**2, 3)
+         ndarray of inside nodes, shape ((factor-1)**2, 3)
     """
     assert ad.shape[0] == bc.shape[0]
     extremities = np.concatenate([ad[:, None], bc[:, None]], axis=1)

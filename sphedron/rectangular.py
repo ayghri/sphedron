@@ -12,7 +12,6 @@ This software is provided "as is", without warranty of any kind.
 """
 
 import numpy as np
-import time
 from .utils.transform import rotate_nodes
 
 from .base import RectangularMesh
@@ -30,35 +29,35 @@ class Cubesphere(RectangularMesh):
     rotation_angle = np.pi / 4
     rotation_axis = "y"
 
-    def __init__(
-        self,
-        refine_factor: int = 1,
-        refine_by_angle=False,
-        rotate=True,
-        nodes=None,
-        faces=None,
-    ):
-
-        start = time.time()
-        if nodes is None or faces is None:
-            nodes, faces = self._base()
-
-        if rotate:
-            nodes = rotate_nodes(
-                nodes,
-                axis=self.rotation_axis,
-                angle=self.rotation_angle,
-            )
-
-        super().__init__(
-            nodes,
-            faces,
-            refine_factor=refine_factor,
-            refine_by_angle=refine_by_angle,
-        )
-
-        self._metadata["compute time (ms)"] = 1000 * (time.time() - start)
-        self._metadata["factor"] = refine_factor
+    # def __init__(
+    #     self,
+    #     refine_factor: int = 1,
+    #     refine_by_angle=False,
+    #     rotate=True,
+    #     nodes=None,
+    #     faces=None,
+    # ):
+    #
+    #     start = time.time()
+    #     if nodes is None or faces is None:
+    #         nodes, faces = self._base()
+    #
+    #     if rotate:
+    #         nodes = rotate_nodes(
+    #             nodes,
+    #             axis=self.rotation_axis,
+    #             angle=self.rotation_angle,
+    #         )
+    #
+    #     super().__init__(
+    #         nodes,
+    #         faces,
+    #         refine_factor=refine_factor,
+    #         refine_by_angle=refine_by_angle,
+    #     )
+    #
+    #     self._metadata["compute time (ms)"] = 1000 * (time.time() - start)
+    #     self._metadata["factor"] = refine_factor
 
     @staticmethod
     def _base():

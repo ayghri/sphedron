@@ -20,6 +20,7 @@ import trimesh
 from .utils.refine import refine_triangles
 from .utils.refine import refine_rectrangles
 from .utils.transform import xyz_to_latlon
+from .utils.transform import rotate_nodes
 from .utils import faces_to_edges
 from .utils import query_nearest
 from .utils import connect_nodes
@@ -30,12 +31,64 @@ class Mesh:
     Each face is a triangle of 3 nodes
     """
 
+    rotation_axis = "y"
+    rotation_angle = 0
+
     def __init__(self, nodes, faces):
         self._metadata = {}
         self._all_nodes = nodes
         self._all_faces = faces
         self._nodes_to_keep: NDArray  # boolean mask for nodes to be kept
         self.reset()
+
+    @classmethod
+    def from_base(
+        cls,
+        refine_factor: int,
+        rotate: bool = True,
+        refine_by_angle: bool = False,
+    ):
+        nodes, faces = cls._base()
+        if rotate:
+            nodes = rotate_nodes(
+                nodes,
+                axis=cls.rotation_axis,
+                angle=cls.rotation_angle,
+            )
+        return cls.from_graph(
+            nodes,
+            faces,
+            refine_factor=refine_factor,
+            refine_by_angle=refine_by_angle,
+        )
+
+    @classmethod
+    def from_graph(
+        cls,
+        base_nodes,
+        base_faces,
+        refine_factor: int,
+        refine_by_angle: bool = False,
+    ):
+        nodes, triangles = cls.refine(
+            base_nodes,
+            base_faces,
+            refine_factor=refine_factor,
+            refine_by_angle=refine_by_angle,
+        )
+        mesh = cls(nodes, triangles)
+        mesh._metadata["factor"] = refine_factor
+        return mesh
+
+    @staticmethod
+    def refine(
+        nodes, faces, refine_factor, refine_by_angle
+    ) -> Tuple[NDArray, NDArray]:
+        raise NotImplementedError
+
+    @staticmethod
+    def _base() -> Tuple[NDArray, NDArray]:
+        raise NotImplementedError
 
     def reset(self):
         """
@@ -206,7 +259,9 @@ class Mesh:
         nearest_senders = query_nearest(
             self.nodes, receiver_mesh.nodes, radius=radius
         )
-        return connect_nodes(nearest_senders, range(receiver_mesh.num_nodes))
+        return connect_nodes(
+            nearest_senders, list(range(receiver_mesh.num_nodes))
+        )
 
     #
     def query_edges_from_neighbors(self, receiver_mesh, n_neighbors):
@@ -223,30 +278,22 @@ class Mesh:
         nearest_senders = query_nearest(
             self.nodes, receiver_mesh.nodes, n_neighbors=n_neighbors
         )
-        return connect_nodes(nearest_senders, range(receiver_mesh.num_nodes))
+        return connect_nodes(
+            nearest_senders, list(range(receiver_mesh.num_nodes))
+        )
 
 
 class TriangularMesh(Mesh):
     """Mesh class for which faces are triangles"""
 
-    def __init__(
-        self,
-        base_nodes,
-        base_triangles,
-        refine_factor=1,
-        refine_by_angle=False,
-    ):
-        nodes, triangles = refine_triangles(
-            base_nodes,
-            base_triangles,
+    @staticmethod
+    def refine(nodes, faces, refine_factor, refine_by_angle):
+        return refine_triangles(
+            nodes,
+            faces,
             factor=refine_factor,
             use_angle=refine_by_angle,
         )
-        super().__init__(nodes, triangles)
-
-    @staticmethod
-    def _base() -> Tuple[NDArray, NDArray]:
-        raise NotImplementedError
 
     def face2triangle_index(self, face_idx):
         return face_idx
@@ -262,30 +309,24 @@ class TriangularMesh(Mesh):
 class RectangularMesh(TriangularMesh):
     """Mesh class for which faces are rectangles"""
 
-    def __init__(
-        self,
-        base_nodes,
-        base_rectangles,
-        refine_factor=1,
-        refine_by_angle=False,
-    ):
-        nodes, rectangles = refine_rectrangles(
-            base_nodes,
-            base_rectangles,
+    @staticmethod
+    def refine(nodes, faces, refine_factor, refine_by_angle):
+        return refine_rectrangles(
+            nodes,
+            faces,
             factor=refine_factor,
             use_angle=refine_by_angle,
         )
-        super().__init__(nodes, rectangles)
 
-    @staticmethod
-    def _base() -> Tuple[NDArray, NDArray]:
-        raise NotImplementedError
+    def face2triangle_index(self, face_idx, num_faces=None):
+        if num_faces is None:
+            num_faces = self.num_faces
+        return np.stack([face_idx, face_idx + num_faces], axis=-1)
 
-    def face2triangle_index(self, face_idx):
-        return np.stack([face_idx, face_idx + self.num_faces], axis=-1)
-
-    def triangle2face_index(self, triangle_idx):
-        return triangle_idx % self.num_faces
+    def triangle2face_index(self, triangle_idx, num_faces=None):
+        if num_faces is None:
+            num_faces = self.num_faces
+        return triangle_idx % num_faces
 
     def faces2triangles(self, faces):
         return np.r_[faces[:, [0, 1, 2]], faces[:, [2, 3, 0]]]
@@ -309,14 +350,16 @@ class NestedMeshes(Mesh):
 
     _base_mesh_cls: Type[TriangularMesh | RectangularMesh]
 
-    def __init__(self, factors: List[int], refine_by_angle=False, **kwargs):
+    def __init__(self, factors: List[int], refine_by_angle=False):
         assert np.min(factors) >= 1
         self._metadata = {}
         self.meshes = []
-        nodes, faces = self._base_mesh_cls._base(**kwargs)
+        # nodes, faces = self._base_mesh_cls._
+        mesh0 = self._base_mesh_cls.from_base(refine_factor=1)
+        nodes, faces = mesh0.nodes, mesh0.faces
         for factor in factors:
             self.meshes.append(
-                self._base_mesh_cls(
+                self._base_mesh_cls.from_graph(
                     nodes,
                     faces,
                     refine_factor=factor,
@@ -364,3 +407,16 @@ class NestedMeshes(Mesh):
             )
         for mesh in self.meshes:
             mesh.mask_nodes(nodes_mask[: mesh.num_nodes])
+
+    # def face2triangle_index(self, face_idx):
+    #     return self.meshes[0].face2triangle_index(
+    #         face_idx, num_faces=self.num_faces
+    #     )
+    #
+    # def triangle2face_index(self, triangle_idx):
+    #     return self.meshes[0].triangle2face_index(
+    #         triangle_idx, num_faces=self.num_faces
+    #     )
+    #
+    # def faces2triangles(self, faces):
+    #     return self.meshes[0].faces2triangles(faces)

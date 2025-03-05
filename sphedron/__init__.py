@@ -11,12 +11,12 @@ Commercial use requires explicit permission.
 This software is provided "as is", without warranty of any kind.
 """
 
-from .icosphere import Icosphere
-from .cube import Cubesphere
-from .octasphere import Octasphere
+from .triangular import Icosphere
+from .triangular import Octasphere
+from .triangular import NestedIcospheres
+from .triangular import NestedOctaspheres
 
-from .icosphere import NestedIcospheres
-from .cube import NestedCubespheres
-from .octasphere import NestedOctaspheres
+from .rectangular import Cubesphere
+from .rectangular import NestedCubespheres
 
-from .transfer import MeshTransfer
+from .mesh_transfer import MeshTransfer

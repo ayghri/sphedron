@@ -28,9 +28,7 @@ from sphedron.mesh import Mesh
 
 
 def landmask_nodes(mesh: Mesh):
-    """Return a land mask for mesh.nodes
-
-    mask[i] is set to true when mesh.nodes[i] is a land node.
+    """Return a land mask for mesh.nodes, where mask[i]==True for land node[i]
 
     Args:
         mesh: mesh to get the nodes from

@@ -11,6 +11,7 @@ Commercial use requires explicit permission.
 This software is provided "as is", without warranty of any kind.
 """
 
+from typing import List
 from numpy.typing import NDArray
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -84,11 +85,30 @@ def query_nearest(
     return indices
 
 
-def connect_nodes(sender_groups, receiver_indices):
+def connect_nodes(
+    sender_groups: NDArray, receiver_indices: NDArray | List
+) -> NDArray:
+    """Connect sender nodes to receiver nodes and return the formed edges.
+
+    This function takes groups of sender nodes and their corresponding receiver
+    index, and creates an array of edges that represent the connections between
+    the elements of the sender groups and receivers.
+
+    Args:
+        sender_groups: 1d or 2d array representing the indices of sender nodes.
+        receiver_indices: 1d array of indices of the receiver nodes.
+
+    Returns:
+        (N,2) shaped array where each edge is (sender_index, receiver_index)
+    """
+
     edges = []
     for senders_i, r_i in zip(sender_groups, receiver_indices):
-        for s_i in senders_i:
-            edges.append([s_i, r_i])
+        if len(senders_i.shape) > 0:
+            for s_i in senders_i:
+                edges.append([s_i, r_i])
+        else:
+            edges.append([senders_i, r_i])
     return np.array(edges)
 
 
