@@ -27,8 +27,8 @@ from .utils import connect_nodes
 
 
 class Mesh:
-    """A mesh base class consisting of faces and nodes.
-    Each face is a triangle of 3 nodes
+    """Mesh base class consisting of faces and nodes. All faces have the
+    same number of nodes.
     """
 
     rotation_axis = "y"
@@ -48,6 +48,24 @@ class Mesh:
         rotate: bool = True,
         refine_by_angle: bool = False,
     ):
+        """Create an instance of the class from the base.
+
+        This method generates nodes and faces from the base configuration
+        returned by cls._base. If the `rotate` parameter is set to True,
+        the nodes will be rotated according to the class's defined rotation
+        axis and angle. The resulting nodes and faces are then passed to
+        the `from_graph` method to create an instance of the class.
+
+        Args:
+            refine_factor: The factor by which to refine the mesh.
+            rotate: A boolean indicating whether to rotate the nodes.
+            refine_by_angle: A boolean indicating whether to refine by
+                angle.
+
+        Returns:
+            An instance of the class created from the generated nodes
+            and faces.
+        """
         nodes, faces = cls._base()
         if rotate:
             nodes = rotate_nodes(
@@ -70,7 +88,28 @@ class Mesh:
         refine_factor: int,
         refine_by_angle: bool = False,
     ):
-        nodes, triangles = cls.refine(
+        """Creates a refined mesh from the given base nodes and faces.
+
+        This method refines the input mesh defined by `base_nodes` and
+        `base_faces` using the specified `refine_factor`. The refinement
+        can be controlled by the `refine_by_angle` parameter, which, if
+        set to True, will refine the mesh based on the angles formed between
+        of the the nodes.
+
+        cls._refine handles the refinement of the mesh, which should be
+        implemented for different types of faces.
+
+        Args:
+            base_nodes: The initial set of nodes defining the mesh.
+            base_faces: The initial set of faces defining the mesh.
+            refine_factor: The factor by which to refine the mesh.
+            refine_by_angle: A boolean flag indicating whether to refine
+                the mesh based on angles. Defaults to False.
+
+        Returns:
+            An instance of the refined mesh.
+        """
+        nodes, triangles = cls._refine(
             base_nodes,
             base_faces,
             refine_factor=refine_factor,
@@ -81,7 +120,7 @@ class Mesh:
         return mesh
 
     @staticmethod
-    def refine(
+    def _refine(
         nodes, faces, refine_factor, refine_by_angle
     ) -> Tuple[NDArray, NDArray]:
         raise NotImplementedError
@@ -287,7 +326,7 @@ class TriangularMesh(Mesh):
     """Mesh class for which faces are triangles"""
 
     @staticmethod
-    def refine(nodes, faces, refine_factor, refine_by_angle):
+    def _refine(nodes, faces, refine_factor, refine_by_angle):
         return refine_triangles(
             nodes,
             faces,
@@ -310,7 +349,7 @@ class RectangularMesh(TriangularMesh):
     """Mesh class for which faces are rectangles"""
 
     @staticmethod
-    def refine(nodes, faces, refine_factor, refine_by_angle):
+    def _refine(nodes, faces, refine_factor, refine_by_angle):
         return refine_rectrangles(
             nodes,
             faces,
@@ -407,16 +446,3 @@ class NestedMeshes(Mesh):
             )
         for mesh in self.meshes:
             mesh.mask_nodes(nodes_mask[: mesh.num_nodes])
-
-    # def face2triangle_index(self, face_idx):
-    #     return self.meshes[0].face2triangle_index(
-    #         face_idx, num_faces=self.num_faces
-    #     )
-    #
-    # def triangle2face_index(self, triangle_idx):
-    #     return self.meshes[0].triangle2face_index(
-    #         triangle_idx, num_faces=self.num_faces
-    #     )
-    #
-    # def faces2triangles(self, faces):
-    #     return self.meshes[0].faces2triangles(faces)

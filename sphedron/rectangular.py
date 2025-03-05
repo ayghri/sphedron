@@ -12,7 +12,6 @@ This software is provided "as is", without warranty of any kind.
 """
 
 import numpy as np
-from .utils.transform import rotate_nodes
 
 from .base import RectangularMesh
 from .base import NestedMeshes

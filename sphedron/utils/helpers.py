@@ -104,7 +104,7 @@ def connect_nodes(
 
     edges = []
     for senders_i, r_i in zip(sender_groups, receiver_indices):
-        if len(senders_i.shape) > 0:
+        if len(senders_i) > 0:
             for s_i in senders_i:
                 edges.append([s_i, r_i])
         else:
