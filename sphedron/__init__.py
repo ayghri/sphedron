@@ -1,6 +1,5 @@
 """
 Author: Ayoub Ghriss, dev@ayghri.com
-Date: 2024
 
 License: Non-Commercial Use Only
 
@@ -20,3 +19,14 @@ from .rectangular import Cubesphere
 from .rectangular import NestedCubespheres
 
 from .mesh_transfer import MeshTransfer
+
+
+__all__ = [
+    "Icosphere",
+    "Octasphere",
+    "NestedIcospheres",
+    "NestedOctaspheres",
+    "Cubesphere",
+    "NestedCubespheres",
+    "MeshTransfer",
+]

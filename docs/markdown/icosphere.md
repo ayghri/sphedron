@@ -1,4 +1,7 @@
-# Construction of the icosphere
+Construction of the icosphere
+=============================
+
+
 
 At level 1, the icosphere has 12 nodes, 20 (triangular) faces, and 30 edges.
 The mesh is refined recursively by quadrupling the number of faces at each
@@ -12,19 +15,14 @@ We can achieve much more precise control by refining the base icosphere so that
 the edges of the refined mesh are equal to $1/n$ of the base icosphere. This
 approach results in a number of nodes that is equal to:
 
-$$
-|V| = 12 + 10*(\nu^2-1)
-$$
+:math:`|V| = 12 + 10*(\nu^2-1)`
 
 The nodes at level 1 are circular permutations of the base nodes.
-
 $$
 \begin{align}
-v_{\alpha,\epsilon} = \frac{1}{\sqrt{1+\phi^2}}[\alpha,\ \epsilon \phi,\ 0],\ \text{where } \ \alpha, \epsilon \in\{-1, +1\},
-\ \text{and } \phi=\frac{1+\sqrt{5}}{2}
+  v_{\alpha,\epsilon} = \frac{1}{\sqrt{1+\phi^2}}[\alpha,\ \epsilon \phi,\ 0],\ \text{where } \ \alpha, \epsilon \in\{-1, +1\}, \text{and } \phi=\frac{1+\sqrt{5}}{2}
 \end{align}
 $$
-
 The coordinates of these 4 base nodes are then permuted circularly (3
 permutations), which yields the 12 nodes at depth 1.
 

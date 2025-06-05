@@ -1,6 +1,5 @@
 """
 Author: Ayoub Ghriss, dev@ayghri.com
-Date: 2024
 
 License: Non-Commercial Use Only
 
@@ -15,7 +14,7 @@ from typing import List
 from numpy.typing import NDArray
 import numpy as np
 from scipy.spatial.transform import Rotation
-from scipy.spatial import cKDTree
+from scipy.spatial import cKDTree # type: ignore
 
 
 def faces_to_edges(faces: NDArray) -> NDArray:
@@ -85,9 +84,7 @@ def query_nearest(
     return indices
 
 
-def connect_nodes(
-    sender_groups: NDArray, receiver_indices: NDArray | List
-) -> NDArray:
+def form_edges(sender_groups: NDArray, receiver_indices: NDArray | List) -> NDArray:
     """Connect sender nodes to receiver nodes and return the formed edges.
 
     This function takes groups of sender nodes and their corresponding receiver
@@ -103,12 +100,11 @@ def connect_nodes(
     """
 
     edges = []
-    for senders_i, r_i in zip(sender_groups, receiver_indices):
-        if len(senders_i) > 0:
-            for s_i in senders_i:
-                edges.append([s_i, r_i])
-        else:
-            edges.append([senders_i, r_i])
+    for s_group, r_idx in zip(sender_groups, receiver_indices):
+        if np.isscalar(s_group):
+            s_group = [s_group]
+        for s_idx in s_group:
+            edges.append((s_idx, r_idx))
     return np.array(edges)
 
 
@@ -124,8 +120,7 @@ def get_rotation_matrices(
     reference angles (theta, phi). The parameters `zero_latitude` and
     `zero_longitude` determine whether the rotation should account for
     adjustments in latitude and longitude. Adapted from:
-        Repo: https://github.com/google-deepmind/graphcast
-        path: graphcast/model_utils.py
+    https://github.com/google-deepmind/graphcast, graphcast/model_utils.py
 
     Args:
         references_thetaphi: An array of reference angles in the form of
@@ -171,9 +166,7 @@ def compute_angles_per_depth(max_depth=100):
     """Compute angles between nodes"""
     phi = (1 + np.sqrt(5)) / 2
     initial_nodes = np.array([[-1, -phi, 0], [1, -phi, 0]])
-    initial_nodes = initial_nodes / np.linalg.norm(
-        initial_nodes, axis=1, keepdims=True
-    )
+    initial_nodes = initial_nodes / np.linalg.norm(initial_nodes, axis=1, keepdims=True)
     angles = []
     for d in range(1, max_depth + 1):
         left_vertex = initial_nodes[0]

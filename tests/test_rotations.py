@@ -7,7 +7,7 @@ import unittest
 
 
 class TestRotations(unittest.TestCase):
-    description = "test rotations of sender/receiver based on zero lat/long."
+    """test rotations of sender/receiver based on zero lat/long."""
 
     def setUp(self):
         receivers_thetaphi = np.array(
@@ -33,7 +33,7 @@ class TestRotations(unittest.TestCase):
         )
         assert_array_almost_equal(obtained, expected)
 
-    def test_zerolatlon(self):
+    def test_zerolatlong(self):
 
         expected = np.array(
             [
@@ -64,7 +64,7 @@ class TestRotations(unittest.TestCase):
         )
         self.compare_result(expected, zero_longitude=True)
 
-    def test_receiverlatlon(self):
+    def test_receiverlatlong(self):
         receivers = np.random.randn(400, 3)
         receivers = receivers / np.linalg.norm(receivers, axis=1, keepdims=True)
         rotated = rotate_senders_by_receivers(receivers, receivers, True, True)

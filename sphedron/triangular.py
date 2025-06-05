@@ -1,6 +1,5 @@
 """
 Author: Ayoub Ghriss, dev@ayghri.com
-Date: 2024
 
 License: Non-Commercial Use Only
 
@@ -21,8 +20,6 @@ class Icosphere(TriangularMesh):
     """Represents an icosphere mesh, triangle-based.
 
     The rotation attributes are chosen to match GraphCast implementation.
-
-
     See `GraphCast: Learning skillful medium-range global weather forecasting`:
     https://arxiv.org/abs/2212.12794
 
@@ -81,35 +78,6 @@ class Icosphere(TriangularMesh):
             dtype=int,
         )
         return nodes, faces
-
-    # def __init__(
-    # self,
-    # nodes,
-    # faces,
-    # rotate=True,
-    # refine_factor: int = 1,
-    # refine_by_angle=False,
-    # ):
-
-    # if nodes is None or faces is None:
-    # nodes, faces = self._base()
-
-    # if rotate:
-    # nodes = rotate_nodes(
-    # nodes,
-    # axis=self.rotation_axis,
-    # angle=self.rotation_angle,
-    # )
-    # nodes, faces = self.refine()
-
-    # super().__init__(
-    # nodes,
-    # faces,
-    #     refine_factor=refine_factor,
-    #     refine_by_angle=refine_by_angle,
-    # )
-
-    # self._metadata["factor"] = refine_factor
 
 
 class NestedIcospheres(NestedMeshes, TriangularMesh):

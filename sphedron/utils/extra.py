@@ -1,6 +1,6 @@
+# type: ignore
 """
 Author: Ayoub Ghriss, dev@ayghri.com
-Date: 2024
 
 License: Non-Commercial Use Only
 
@@ -10,6 +10,7 @@ Commercial use requires explicit permission.
 
 This software is provided "as is", without warranty of any kind.
 """
+
 
 from cartopy import feature
 from cartopy.io import shapereader
@@ -27,7 +28,7 @@ import numpy as np
 from sphedron.mesh import Mesh
 
 
-def landmask_nodes(mesh: Mesh):
+def get_mesh_landmask(mesh: Mesh):
     """Return a land mask for mesh.nodes, where mask[i]==True for land node[i]
 
     Args:
@@ -42,13 +43,10 @@ def landmask_nodes(mesh: Mesh):
         category="physical",
         name="land",
     )
-    land_geom = unary_union(
-        list(shapereader.Reader(land_shp_fname).geometries())
-    )
+    land_geom = unary_union(list(shapereader.Reader(land_shp_fname).geometries()))
     land = prep(land_geom)
     mask = [
-        land.contains(geometry.Point(*latlon[::-1]))
-        for latlon in mesh.nodes_latlon
+        land.contains(geometry.Point(*latlong[::-1])) for latlong in mesh.nodes_latlong
     ]
     return np.array(mask)
 
@@ -86,14 +84,10 @@ def plot_3d_mesh(
 
         # blending face colors and face shading intensity
         rgb = np.array(
-            light_source.blend_hsv(
-                rgb=jet, intensity=intensity.reshape(-1, 1, 1)
-            )
+            light_source.blend_hsv(rgb=jet, intensity=intensity.reshape(-1, 1, 1))
         )
         # adding alpha value, may be left out
-        rgba = np.concatenate(
-            (rgb, 1.0 * np.ones(shape=(rgb.shape[0], 1, 1))), axis=2
-        )
+        rgba = np.concatenate((rgb, 1.0 * np.ones(shape=(rgb.shape[0], 1, 1))), axis=2)
         poly.set_facecolor(rgba.reshape(-1, 4))
     # creating mesh with given face colors
     poly.set_edgecolor("black")
@@ -138,7 +132,7 @@ def plot_2d_mesh(
     # if edges is None:
     # edges = mesh.edges_unique
     edges = mesh.edges_unique
-    segments = mesh.nodes_latlon[:, ::-1][edges]
+    segments = mesh.nodes_latlong[:, ::-1][edges]
     lc = LineCollection(
         segments,
         linewidths=0.5,
@@ -149,8 +143,8 @@ def plot_2d_mesh(
     ax.gridlines(draw_labels=True, linestyle="--", color="black", linewidth=0.5)
     if scatter:
         ax.scatter(
-            mesh.nodes_latlon[:, 1],
-            mesh.nodes_latlon[:, 0],
+            mesh.nodes_latlong[:, 1],
+            mesh.nodes_latlong[:, 0],
             s=s,
             transform=ccrs.PlateCarree(),
         )
@@ -182,9 +176,7 @@ def plot_nodes(
     ax.set_xticks([-1, 0, 1])
     ax.set_yticks([-1, 0, 1])
     ax.set_zticks([-1, 0, 1])
-    for i, m in enumerate(
-        mesh.nodes
-    ):  # plot each point + it's index as text above
+    for i, m in enumerate(mesh.nodes):  # plot each point + it's index as text above
         ax.scatter(m[0], m[1], m[2], color="b")
         ax.text(m[0], m[1], m[2], str(i), size=20, zorder=10, color="k")
     ax.set_title(title)

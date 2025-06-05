@@ -1,6 +1,5 @@
 """
 Author: Ayoub Ghriss, dev@ayghri.com
-Date: 2024
 
 License: Non-Commercial Use Only
 
@@ -81,8 +80,8 @@ def sender2receiver_edge_coords(
         zero_longitude=zero_longitude,
     )
     receivers_wrt_receivers = rotate_senders_by_receivers(
-        receiver_nodes[sender2receiver_edges[:, 0]],
-        receiver_nodes[sender2receiver_edges[:, 0]],
+        receiver_nodes[sender2receiver_edges[:, 1]],
+        receiver_nodes[sender2receiver_edges[:, 1]],
         zero_latitude=zero_latitude,
         zero_longitude=zero_longitude,
     )
@@ -125,27 +124,27 @@ def thetaphi_to_xyz(thetaphi: NDArray):
     ]
 
 
-def latlon_to_thetaphi(latlon: NDArray) -> NDArray:
+def latlong_to_thetaphi(latlong: NDArray) -> NDArray:
     """
     Convert latitude-longitude to spherical (theta, phi)
     where theta is the inclination (angle from positive z-axis)
     and phi the azimuth (z-axis rotation).
     """
-    return np.c_[np.deg2rad(90 - latlon[:, [0]]), np.deg2rad(latlon[:, [1]])]
+    return np.c_[np.deg2rad(90 - latlong[:, [0]]), np.deg2rad(latlong[:, [1]])]
 
 
-def thetaphi_to_latlon(thetaphi: NDArray):
+def thetaphi_to_latlong(thetaphi: NDArray):
     """Convert spherical to latitude/longitude"""
     lats = 90 - np.rad2deg(thetaphi[:, 0])
     longs = np.rad2deg(thetaphi[:, 1])
     return np.c_[lats, longs]
 
 
-def xyz_to_latlon(xyz: NDArray) -> NDArray:
+def xyz_to_latlong(xyz: NDArray) -> NDArray:
     """Cartesian coordinates on the unit sphere to latitude,longitude"""
-    return thetaphi_to_latlon(xyz_to_thetaphi(xyz))
+    return thetaphi_to_latlong(xyz_to_thetaphi(xyz))
 
 
-def latlon_to_xyz(latlon: NDArray) -> NDArray:
+def latlong_to_xyz(latlong: NDArray) -> NDArray:
     """latitude,longitude to Cartesian coordinates on the unit sphere"""
-    return thetaphi_to_xyz(latlon_to_thetaphi(latlon))
+    return thetaphi_to_xyz(latlong_to_thetaphi(latlong))

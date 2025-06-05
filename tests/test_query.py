@@ -7,7 +7,7 @@ import unittest
 
 
 class TestMeshQuery(unittest.TestCase):
-    description = "test mesh queries based on radius/#neighbors"
+    """test mesh queries based on radius/#neighbors"""
 
     def setUp(self) -> None:
         self.receiver_mesh = Icosphere.from_base(refine_factor=64)

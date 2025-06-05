@@ -1,6 +1,5 @@
 """
 Author: Ayoub Ghriss, dev@ayghri.com
-Date: 2024
 
 License: Non-Commercial Use Only
 
@@ -17,6 +16,8 @@ import numpy as np
 
 from .mesh import Mesh
 from .utils import query_nearest
+
+# from .utils import query_nearest
 
 
 class MeshTransfer:
@@ -73,7 +74,7 @@ class MeshTransfer:
         """
         if sent_values.shape[0] != self._sender_mesh.num_nodes:
             raise ValueError(
-                "sent_values and sender mesh do correspond"
+                "sent_values and sender mesh do not correspond"
                 "to the same number of nodes."
             )
         self.compute_neighbors(recompute)
@@ -135,8 +136,10 @@ class MeshTransfer:
                 self._receiver_mesh.nodes,
                 n_neighbors=self._n_neighbors,
             )
-            self._nearest_distances = np.linalg.norm(
-                self._receiver_mesh.nodes[:, None, :]
-                - self._sender_mesh.nodes[self._nearest_senders],
-                axis=-1,
-            )
+            if self._n_neighbors == 1:
+                self._nearest_senders = np.expand_dims(self._nearest_senders, -1)
+            # self._nearest_distances = np.linalg.norm(
+            # self._receiver_mesh.nodes[:, None, :]
+            # - self._sender_mesh.nodes[self._nearest_senders],
+            # axis=-1,
+            # )
