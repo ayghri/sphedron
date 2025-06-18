@@ -10,50 +10,58 @@ Commercial use requires explicit permission.
 This software is provided "as is", without warranty of any kind.
 """
 
-from typing import List, Tuple, Type
+from typing import Tuple, Optional, Type, List
 from numpy.typing import NDArray
 import numpy as np
 import trimesh
 
 
-from .utils.refine import refine_triangles
-from .utils.refine import refine_rectrangles
-from .utils.transform import xyz_to_latlong
-from .utils.transform import rotate_nodes
-from .utils import faces_to_edges
-from .utils import query_nearest
-from .utils import form_edges
+from .refine import refine_triangles
+from .refine import refine_rectrangles
+from .transform import xyz_to_latlong
+from .transform import rotate_nodes
+from .transform import latlong_to_xyz
+from .helpers import faces_to_edges
+from .helpers import query_nearest
+from .helpers import query_radius
+from .helpers import form_edges
 
 
 class Mesh:
-    """Mesh base class consisting of faces and nodes. All faces have the
-    same number of nodes.
+    """
+    A flexible base class for a mesh on a sphere.
+    Provides core functionality like node/face storage, masking, and
+    cached properties. It does not dictate how a mesh is created,
+    allowing for maximum flexibility in subclasses.
     """
 
     rotation_axis = "y"
     rotation_angle = 0
 
-    def __init__(self, nodes, faces):
-        self._metadata = {}
+    def __init__(self, nodes: Optional[NDArray], faces: Optional[NDArray]):
+        if nodes is None or faces is None:
+            return
+
+        self.metadata = {}
         self._all_nodes = nodes
         self._all_faces = faces
-        self._nodes_to_keep: NDArray  # boolean mask for nodes to be kept
+        self._cached_properties = {}
         self.reset()
 
     @classmethod
     def from_base(
         cls,
-        refine_factor: int,
+        refine_factor: int = 1,
         rotate: bool = True,
         refine_by_angle: bool = False,
     ):
         """Create an instance of the class from the base.
 
         This method generates nodes and faces from the base configuration
-        returned by cls._base. If the `rotate` parameter is set to True,
-        the nodes will be rotated according to the class's defined rotation
-        axis and angle. The resulting nodes and faces are then passed to
-        the `from_graph` method to create an instance of the class.
+        returned by cls._base. If the `rotate` parameter is set to True, nodes
+        will be rotated according to the class's rotation_{axis,angle}.
+        The resulting nodes and faces are then passed to the `from_graph`
+        method to create an instance of the class.
 
         Args:
             refine_factor: The factor by which to refine the mesh.
@@ -72,6 +80,7 @@ class Mesh:
                 axis=cls.rotation_axis,
                 angle=cls.rotation_angle,
             )
+
         return cls.from_graph(
             nodes,
             faces,
@@ -82,9 +91,9 @@ class Mesh:
     @classmethod
     def from_graph(
         cls,
-        base_nodes,
-        base_faces,
-        refine_factor: int,
+        nodes,
+        faces,
+        refine_factor: int = 1,
         refine_by_angle: bool = False,
     ):
         """Creates a refined mesh from the given base nodes and faces.
@@ -108,19 +117,21 @@ class Mesh:
         Returns:
             An instance of the refined mesh.
         """
-        nodes, triangles = cls._refine(
-            base_nodes,
-            base_faces,
+        nodes, faces = cls._refine(
+            nodes,
+            faces,
             refine_factor=refine_factor,
             refine_by_angle=refine_by_angle,
         )
-        mesh = cls(nodes, triangles)
-        mesh._metadata["factor"] = refine_factor
-        return mesh
+        return cls(nodes=nodes, faces=faces)
 
     @staticmethod
     def _refine(
-        nodes, faces, refine_factor, refine_by_angle
+        nodes,
+        faces,
+        refine_factor,
+        refine_by_angle=False,
+        **kwargs,
     ) -> Tuple[NDArray, NDArray]:
         raise NotImplementedError
 
@@ -128,11 +139,11 @@ class Mesh:
     def _base() -> Tuple[NDArray, NDArray]:
         raise NotImplementedError
 
-    def reset(self):
-        """
-        Resets the mesh to its initial state by reinitializing the nodes mask
-        """
-        self._nodes_to_keep = np.ones(self._all_nodes.shape[0], dtype=bool)
+    # def reset(self):
+    #     """
+    #     Resets the mesh to its initial state by reinitializing the nodes mask
+    #     """
+    #     self._nodes_to_keep = np.ones(self._all_nodes.shape[0], dtype=bool)
 
     def __repr__(self) -> str:
         return (
@@ -140,7 +151,7 @@ class Mesh:
             f"          #faces: {self.num_faces}\n"
             f"          #edges: {self.num_edges}\n"
             f"          #edges_unique: {self.edges_unique.shape[0]}\n"
-            f"          metadata: {self._metadata}"
+            f"          metadata: {self.metadata}"
         )
 
     @property
@@ -195,7 +206,7 @@ class Mesh:
         return self.edges.shape[0]
 
     @property
-    def num_faces(self):
+    def num_faces(self) -> int:
         """Number of faces"""
         retained_faces = np.all(self._nodes_to_keep[self._all_faces], axis=1)
         return int(np.sum(retained_faces))
@@ -271,9 +282,7 @@ class Mesh:
             sender_trimesh, receiver_nodes
         )
         # shape (N,face_length)
-        nearest_faces = self.faces[
-            self.triangle2face_index(query_triangle_indices)
-        ]
+        nearest_faces = self.faces[self.triangle2face_index(query_triangle_indices)]
 
         receiver_indices = np.tile(
             np.arange(receiver_nodes.shape[0])[:, None],
@@ -283,9 +292,7 @@ class Mesh:
             [nearest_faces[..., None], receiver_indices[..., None]], axis=-1
         ).reshape(-1, 2)
 
-    def query_edges_from_radius(
-        self, receiver_mesh: "Mesh", radius: float
-    ) -> NDArray:
+    def query_edges_from_radius(self, receiver_mesh: "Mesh", radius: float) -> NDArray:
         """Get edges connecting nearest neighboring nodes to receiver nodes.
 
         Args:
@@ -296,9 +303,7 @@ class Mesh:
             Array of edges connecting nearest neighboring nodes to receiver
                 nodes, shaped (N,2)
         """
-        nearest_senders = query_nearest(
-            self.nodes, receiver_mesh.nodes, radius=radius
-        )
+        nearest_senders = query_radius(self.nodes, receiver_mesh.nodes, radius=radius)
         return form_edges(nearest_senders, np.arange(receiver_mesh.num_nodes))
 
     #
@@ -313,104 +318,359 @@ class Mesh:
             Array of edges connecting nearest neighboring nodes to receiver
                 nodes, shaped (N,2)
         """
-        nearest_senders = query_nearest(
+        _, nearest_senders = query_nearest(
             self.nodes, receiver_mesh.nodes, n_neighbors=n_neighbors
         )
         return form_edges(nearest_senders, np.arange(receiver_mesh.num_nodes))
 
+    def _invalidate_cache(self):
+        self._is_dirty = True
+        self._cached_properties = {}
+
+    def reset(self):
+        self._nodes_to_keep = np.ones(self._all_nodes.shape[0], dtype=bool)
+        self._invalidate_cache()
+
+
+class RefinableMesh(Mesh):
+    """
+    An abstract base for meshes that are created by refining a base geometry.
+
+    This class encapsulates the creation pattern:
+    1. Get a base set of nodes and faces (`_base`).
+    2. Optionally rotate them.
+    3. Refine them using a specific strategy (`_refine`).
+
+    Subclasses *must* implement `_base` and `_refine`.
+    """
+
+    rotation_axis = "y"
+    rotation_angle = 0
+
+    def __init__(
+        self,
+        nodes=None,
+        faces=None,
+        refine_factor: int = 1,
+        rotate: bool = False,
+        refine_by_angle: bool = False,
+    ):
+        # 1. Get the base geometry from the concrete class (e.g., Icosphere)
+
+        if nodes is None:
+            base_nodes, base_faces = self._base()
+        else:
+            base_nodes, base_faces = nodes, faces
+
+        # 2. Optionally rotate it
+        if rotate:
+            base_nodes = rotate_nodes(
+                base_nodes,
+                axis=self.__class__.rotation_axis,
+                angle=self.__class__.rotation_angle,
+            )
+
+        # 3. Refine the geometry
+        nodes, faces = self._refine(
+            base_nodes,
+            base_faces,
+            refine_factor=refine_factor,
+            refine_by_angle=refine_by_angle,
+        )
+
+        # 4. Initialize the parent Mesh with the final nodes and faces
+        super().__init__(nodes, faces)
+        self.metadata["factor"] = refine_factor
+
 
 class TriangularMesh(Mesh):
-    """Mesh class for which faces are triangles"""
+    """Mixin class for meshes with triangular faces."""
 
     @staticmethod
-    def _refine(nodes, faces, refine_factor, refine_by_angle):
+    def _refine(nodes, faces, refine_factor, refine_by_angle=False, **kwargs):
         return refine_triangles(
             nodes,
             faces,
             factor=refine_factor,
-            use_angle=refine_by_angle,
+            angle=refine_by_angle,
+            **kwargs,
         )
 
-    def face2triangle_index(self, face_idx):
-        return face_idx
-
-    def triangle2face_index(self, triangle_idx):
-        return triangle_idx
-
-    @property
-    def triangles(self):
-        return self.faces
+    def faces2triangles(self, faces: NDArray) -> NDArray:
+        return faces
 
 
-class RectangularMesh(TriangularMesh):
-    """Mesh class for which faces are rectangles"""
+class RectangularMesh(Mesh):
+    """Mixin class for meshes with rectangular faces."""
 
     @staticmethod
-    def _refine(nodes, faces, refine_factor, refine_by_angle):
-        return refine_rectrangles(
-            nodes,
-            faces,
-            factor=refine_factor,
-            use_angle=refine_by_angle,
-        )
+    def _refine(nodes, faces, refine_factor, refine_by_angle=False, **kwargs):
+        return refine_rectrangles(nodes, faces, **kwargs)
 
-    def face2triangle_index(self, face_idx, num_faces=None):
-        if num_faces is None:
-            num_faces = self.num_faces
-        return np.stack([face_idx, face_idx + num_faces], axis=-1)
-
-    def triangle2face_index(self, triangle_idx, num_faces=None):
-        if num_faces is None:
-            num_faces = self.num_faces
-        return triangle_idx % num_faces
-
-    def faces2triangles(self, faces):
-        return np.r_[faces[:, [0, 1, 2]], faces[:, [2, 3, 0]]]
+    def faces2triangles(self, faces: NDArray) -> NDArray:
+        if faces.ndim != 2 or faces.shape[1] != 4:
+            return np.empty((0, 3), dtype=faces.dtype)
+        return np.vstack((faces[:, [0, 1, 2]], faces[:, [2, 3, 0]]))
 
 
-class NestedMeshes(Mesh):
+class Icosphere(TriangularMesh, RefinableMesh):
     """
-    A class to create nested meshes, where self.mesh[i+1] is a refined
-    self.meshes[i].
+    A triangular mesh generated from a refined icosahedron.
+    Rotation angle is chosen to match Graphcast paper.
+    """
 
-    Args:
-        factors: A list of integers representing the refinement factors for
-            each level of nesting. Each factor be greater than 1, except for
-            the first factor
-        refine_by_angle: A boolean flag indicating whether to refine the mesh
-            based on angle or length. Defaults to False.
+    rotation_angle = -np.pi / 2 + np.arcsin((1 + np.sqrt(5)) / np.sqrt(12))
+    rotation_axis = "y"
+
+    @staticmethod
+    def _base() -> Tuple[NDArray, NDArray]:
+        """Provides the base 12-node, 20-face icosahedron geometry."""
+        phi = (1 + np.sqrt(5)) / 2
+        nodes = np.array(
+            [
+                [0, 1, phi],
+                [0, -1, phi],
+                [1, phi, 0],
+                [-1, phi, 0],
+                [phi, 0, 1],
+                [-phi, 0, 1],
+            ]
+        )
+        nodes = np.concatenate([nodes, -nodes], axis=0)
+        nodes /= np.linalg.norm(nodes, axis=1, keepdims=True)
+        faces = np.array(
+            [
+                [0, 1, 4],
+                [0, 2, 3],
+                [0, 3, 5],
+                [0, 2, 4],
+                [0, 1, 5],
+                [1, 5, 8],
+                [1, 8, 9],
+                [2, 4, 11],
+                [2, 7, 11],
+                [3, 2, 7],
+                [3, 7, 10],
+                [4, 1, 9],
+                [4, 9, 11],
+                [5, 3, 10],
+                [5, 8, 10],
+                [7, 6, 11],
+                [8, 6, 10],
+                [9, 6, 8],
+                [10, 6, 7],
+                [11, 6, 9],
+            ],
+            dtype=int,
+        )
+        return nodes, faces
+
+
+class Octasphere(RefinableMesh, TriangularMesh):
+    """A triangular mesh generated from a refined octahedron."""
+
+    @staticmethod
+    def _base() -> Tuple[NDArray, NDArray]:
+        """Provides the base 6-node, 8-face octahedron geometry."""
+        vertices = np.array(
+            [
+                [1, 0, 0],
+                [0, 0, 1],
+                [0, 1, 0],
+                [0, 0, -1],
+                [0, -1, 0],
+                [-1, 0, 0],
+            ]
+        )
+        faces = np.array(
+            [
+                [0, 1, 2],
+                [0, 2, 3],
+                [0, 3, 4],
+                [0, 4, 1],
+                [5, 1, 2],
+                [5, 2, 3],
+                [5, 3, 4],
+                [5, 4, 1],
+            ],
+            dtype=int,
+        )
+        return vertices, faces
+
+
+class Cubesphere(RefinableMesh, RectangularMesh):
+    """Represents an cubesphere mesh, square-based.
 
     Attributes:
-        meshes: A list to hold the created nested meshes.
+        rotation_angle: The angle used for rotating the icosphere.
+        rotation_axis: The axis around which the icosphere is rotated.
     """
 
-    _base_mesh_cls: Type[TriangularMesh | RectangularMesh]
+    rotation_angle = np.pi / 4
+    rotation_axis = "y"
 
-    def __init__(self, factors: List[int], refine_by_angle=False):
-        assert np.min(factors) >= 1
-        self._metadata = {}
-        self.meshes = []
-        # nodes, faces = self._base_mesh_cls._
-        mesh0 = self._base_mesh_cls.from_base(refine_factor=1)
-        nodes, faces = mesh0.nodes, mesh0.faces
+    @staticmethod
+    def _base():
+        """
+              Create the base cube
+
+              Returns:
+                  Tuple (nodes, faces) of shapes (8,3), (6,3)
+
+            (-1,-1,1) 4------------5 (-1,1,1)
+                     /|           /|
+                    / |          / |
+                   /  |         /  |
+         (1,-1,1) 0---|--------1 (1,1,1)
+           (-1,-1,-1) 7--------|---6 (-1,1,-1)
+                  |  /         |  /
+                  | /          | /
+                  |/           |/
+        (1,-1,-1) 3------------2 (1,1,-1)
+        """
+
+        nodes = np.array(
+            [
+                [1, -1, 1],
+                [1, 1, 1],
+                [1, 1, -1],
+                [1, -1, -1],
+                [-1, -1, 1],
+                [-1, 1, 1],
+                [-1, 1, -1],
+                [-1, -1, -1],
+            ]
+        )
+        nodes = nodes / np.sqrt(3)
+        faces = np.array(
+            [
+                [0, 1, 2, 3],
+                [1, 5, 6, 2],
+                [5, 4, 7, 6],
+                [4, 0, 3, 7],
+                [0, 4, 5, 1],
+                [3, 2, 6, 7],
+            ],
+            dtype=int,
+        )
+
+        return nodes, faces
+
+
+class NodesOnlyMesh(Mesh):
+    """
+    A "mesh" defined only by a set of nodes. Inherits directly from Mesh
+    as it does not use the refinement creation pattern.
+    """
+
+    def __init__(self, nodes_latlong):
+        nodes_xyz = latlong_to_xyz(nodes_latlong)
+        faces = np.arange(nodes_xyz.shape[0])[:, np.newaxis].repeat(3, axis=1)
+        super().__init__(nodes_xyz, faces)
+
+    def faces2triangles(self, faces: NDArray) -> NDArray:
+        return faces
+
+
+class UniformMesh(NodesOnlyMesh):  # pylint: disable=W0223
+    """Mesh of uniformly distributed latitude and longitude"""
+
+    def __init__(self, resolution=1.0):
+        self.resolution = resolution
+        self.multiplier_long = int(180.0 / resolution)
+        self.multiplier_lat = int(90.0 / resolution)
+        self.uniform_long = (
+            np.arange(-self.multiplier_long, self.multiplier_long, 1) * resolution
+        )
+        self.uniform_lat = (
+            np.arange(-self.multiplier_lat, self.multiplier_lat + 1, 1) * resolution
+        )
+        self.uniform_coords = (
+            np.array(np.meshgrid(self.uniform_lat, self.uniform_long)).reshape(2, -1).T
+        )
+        super().__init__(self.uniform_coords)
+
+    def reshape(self, values):
+        vals = values.T.reshape(
+            self.uniform_long.shape[0], self.uniform_lat.shape[0], -1
+        ).transpose(1, 0, 2)
+        if values.ndim == 1:
+            return vals[..., 0]
+        return vals
+
+
+class NestedMeshes:
+    """
+    A manager for a hierarchy of meshes, where each mesh is a refinement
+    of the previous one.
+
+    This class composes multiple Mesh objects rather than inheriting from Mesh,
+    providing a clearer and more robust API.
+    """
+
+    _base_mesh_cls: Type[Mesh] = Mesh
+
+    def __init__(
+        self,
+        factors: List[int],
+        refine_by_angle: bool = False,
+        rotate: bool = True,
+    ):
+        assert issubclass(self._base_mesh_cls, Mesh)
+        assert np.all(np.array(factors) >= 1)
+
+        self._metadata = {
+            "factors": factors,
+            "cumulative_factors": np.cumprod(factors).tolist(),
+        }
+        self.meshes: List[Mesh] = []
+
+        # Create the hierarchy of meshes
+        mesh0 = self._base_mesh_cls.from_base(refine_factor=1, rotate=rotate)
+        nodes, faces = mesh0._all_nodes, mesh0._all_faces
+
         for factor in factors:
-            self.meshes.append(
-                self._base_mesh_cls.from_graph(
-                    nodes,
-                    faces,
-                    refine_factor=factor,
-                    refine_by_angle=refine_by_angle,
-                )
+            # Create a new mesh by refining the previous one
+            mesh = self._base_mesh_cls.from_graph(
+                nodes,
+                faces,
+                refine_factor=factor,
+                refine_by_angle=refine_by_angle,
             )
-            nodes, faces = self.meshes[-1].nodes, self.meshes[-1].faces
+            self.meshes.append(mesh)
+            nodes, faces = mesh._all_nodes, mesh._all_faces
 
-        super().__init__(None, None)
-        self._metadata["depth"] = np.cumprod(factors).tolist()
-        self._metadata["factor"] = list(factors)
+    def __getitem__(self, level: int) -> Mesh:
+        """Get the mesh at a specific refinement level."""
+        return self.meshes[level]
+
+    def __len__(self) -> int:
+        """Return the number of refinement levels."""
+        return len(self.meshes)
+
+    @property
+    def finest_mesh(self) -> Mesh:
+        """Returns the mesh at the highest refinement level."""
+        return self.meshes[-1]
 
     def reset(self):
+        """Resets the node masks on all meshes in the hierarchy."""
         for mesh in self.meshes:
             mesh.reset()
+
+    def mask_nodes(self, nodes_mask: NDArray[np.bool_]):
+        """
+        Applies a mask to the finest mesh and propagates the masking
+        effect to coarser meshes where applicable.
+        """
+        if nodes_mask.shape[0] != self.num_nodes:
+            raise ValueError(
+                f"Nodes mask should have num_nodes={self.num_nodes} entries"
+            )
+
+        # This simple masking assumes nodes are perfectly nested.
+        for mesh in self.meshes:
+            mesh.mask_nodes(nodes_mask[: mesh.num_nodes])
 
     @property
     def nodes(self):
@@ -436,10 +696,18 @@ class NestedMeshes(Mesh):
     def faces(self) -> NDArray[np.int_]:
         return np.concatenate([mesh.faces for mesh in self.meshes], axis=0)
 
-    def mask_nodes(self, nodes_mask: NDArray[np.bool_]):
-        if nodes_mask.shape[0] != self.num_nodes:
-            raise ValueError(
-                f"Nodes mask should have num_nodes={self.num_nodes} entries"
-            )
-        for mesh in self.meshes:
-            mesh.mask_nodes(nodes_mask[: mesh.num_nodes])
+
+class NestedCubespheres(NestedMeshes):
+    """Nested cubespheres, where self.mesh[i+1] is a refined self.meshes[i]."""
+
+    _base_mesh_cls = Cubesphere
+
+
+class NestedOctaspheres(NestedMeshes):
+    """Nested octaspheres, where self.mesh[i+1] is a refined self.meshes[i]."""
+
+    _base_mesh_cls = Octasphere
+
+
+class NestedIcospheres(NestedMeshes):
+    _base_mesh_cls = Icosphere

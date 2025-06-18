@@ -12,8 +12,8 @@ This software is provided "as is", without warranty of any kind.
 
 import numpy as np
 
-from .base import TriangularMesh
-from .base import NestedMeshes
+from .mesh import TriangularMesh
+from .mesh import NestedMeshes
 
 
 class Icosphere(TriangularMesh):

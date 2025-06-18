@@ -15,7 +15,7 @@ from numpy.typing import NDArray
 import numpy as np
 
 from .mesh import Mesh
-from .utils import query_nearest
+from .helpers import query_nearest
 
 # from .utils import query_nearest
 
@@ -91,7 +91,7 @@ class MeshTransfer:
     def weighted_transfer(
         self,
         sent_values: NDArray,
-        weight_func: Callable | None = None,
+        weight_func: Callable,
         recompute: bool = False,
     ) -> NDArray:
         """
@@ -115,15 +115,7 @@ class MeshTransfer:
         self.compute_neighbors(recompute)
 
         nearest_vals = sent_values[self._nearest_senders]
-        if weight_func is None:
-
-            def weighing_func(x):
-                return np.ones_like(x)
-
-        else:
-            weighing_func = weight_func
-
-        weights = weighing_func(self._nearest_distances)
+        weights = weight_func(self._nearest_distances)
         weights = weights / weights.sum(axis=1, keepdims=True)
 
         return (nearest_vals * weights).sum(axis=1)
@@ -131,15 +123,10 @@ class MeshTransfer:
     def compute_neighbors(self, recompute: bool):
         """Get neighbors for sender to receiver mesh"""
         if self._nearest_senders is None or recompute:
-            self._nearest_senders = query_nearest(
+            self._nearest_distances, self._nearest_senders = query_nearest(
                 self._sender_mesh.nodes,
                 self._receiver_mesh.nodes,
                 n_neighbors=self._n_neighbors,
             )
             if self._n_neighbors == 1:
                 self._nearest_senders = np.expand_dims(self._nearest_senders, -1)
-            # self._nearest_distances = np.linalg.norm(
-            # self._receiver_mesh.nodes[:, None, :]
-            # - self._sender_mesh.nodes[self._nearest_senders],
-            # axis=-1,
-            # )

@@ -10,11 +10,11 @@ Commercial use requires explicit permission.
 This software is provided "as is", without warranty of any kind.
 """
 
-from typing import List
+from typing import List, Tuple
 from numpy.typing import NDArray
 import numpy as np
 from scipy.spatial.transform import Rotation
-from scipy.spatial import cKDTree # type: ignore
+from scipy.spatial import cKDTree  # type: ignore
 
 
 def faces_to_edges(faces: NDArray) -> NDArray:
@@ -42,8 +42,39 @@ def faces_to_edges(faces: NDArray) -> NDArray:
 def query_nearest(
     references_xyz: NDArray,
     nodes_xyz: NDArray,
-    radius: float = -1.0,
-    n_neighbors: int = -1,
+    n_neighbors: int,
+) -> Tuple[NDArray, NDArray]:
+    """
+    Find the nearest neighbors for a set of nodes based on given reference
+    points.
+
+    This function returns the indices of the nearest reference neighbors
+    for each point in `nodes_xyz`. The neighbors can be determined either by
+    a specified number of neighbors (`n_neighbors`) or by a specified
+    radius (`radius`). If both parameters are set, the function will
+    prioritize the radius.
+
+    Args:
+        references_xyz: reference points, shape (N, 3)
+        nodes_xyz: nodes for which to find nearest neighbors, shape (M, 3)
+        radius: The radius to consider for finding the neighbors.
+        n_neighbors: The number of nearest neighbors to return for each node.
+
+    Returns:
+        An array of arrays of indices of the nearest neighbors,
+        of shape (M, n_neighbors) when n_neighbors is set
+    """
+
+    distances, indices = cKDTree(references_xyz).query(
+        x=nodes_xyz, k=n_neighbors, workers=-1
+    )
+    return distances, indices
+
+
+def query_radius(
+    references_xyz: NDArray,
+    nodes_xyz: NDArray,
+    radius: float,
 ) -> NDArray:
     """
     Find the nearest neighbors for a set of nodes based on given reference
@@ -65,22 +96,10 @@ def query_nearest(
         An array of arrays of indices of the nearest neighbors,
         of shape (M, n_neighbors) when n_neighbors is set
     """
-    # either n_neighbors or radius should be used but not both
-    # assert n_neighbors * radius < 0
-    if radius > 0:
-        indices = cKDTree(references_xyz).query_ball_point(
-            x=nodes_xyz, r=radius, workers=-1
-        )
-    else:
-        if n_neighbors < 0:
-            raise ValueError(
-                "Either radius or n_neighbors should be provided,"
-                f"(n_neighbors, radius)=({n_neighbors}, {radius})  "
-            )
 
-        _, indices = cKDTree(references_xyz).query(
-            x=nodes_xyz, k=n_neighbors, workers=-1
-        )
+    indices = cKDTree(references_xyz).query_ball_point(
+        x=nodes_xyz, r=radius, workers=-1
+    )
     return indices
 
 

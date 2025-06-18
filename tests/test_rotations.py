@@ -1,6 +1,6 @@
 import numpy as np
-from sphedron.utils.transform import rotate_senders_by_receivers
-from sphedron.utils.transform import thetaphi_to_xyz
+from sphedron.transform import rotate_senders_by_receivers
+from sphedron.transform import thetaphi_to_xyz
 from numpy.testing import assert_array_almost_equal
 
 import unittest

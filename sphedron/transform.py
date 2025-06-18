@@ -13,7 +13,6 @@ This software is provided "as is", without warranty of any kind.
 from numpy.typing import NDArray
 import numpy as np
 from scipy.spatial.transform import Rotation
-
 from .helpers import get_rotation_matrices as _get_rotations
 
 

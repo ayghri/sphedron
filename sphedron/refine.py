@@ -62,7 +62,7 @@ def refine_triangles(
     nodes: NDArray,
     triangles: NDArray,
     factor: int,
-    use_angle: bool = False,
+    angle: bool = False,
 ) -> Tuple[NDArray, NDArray]:
     """
     Adapted from https://github.com/vedranaa/icosphere
@@ -74,7 +74,7 @@ def refine_triangles(
         triangles: Indices of each face's nodes, shape (T,3)
         factor: refinement factor that reflects the factor of
             subdivision.
-        use_angle: A boolean flag indicating whether to use angle-based
+        angle: A boolean flag indicating whether to use angle-based
             refinement. See split_edges
 
     Returns:
@@ -127,7 +127,7 @@ def refine_triangles(
     nodes_on_edges = split_edges(
         edge_extremes,
         num_segments=factor,
-        use_angle=use_angle,
+        use_angle=angle,
     )
     # Step 1: e add (factor-1) nodes per edge
     new_nodes[n_nodes : n_nodes + n_edges * (factor - 1)] = nodes_on_edges
@@ -166,7 +166,7 @@ def refine_triangles(
         new_nodes[triangle_nodes, :] = triangle_interior(
             new_nodes[sorted_ab, :],
             new_nodes[sorted_ac, :],
-            use_angle=use_angle,
+            use_angle=angle,
         )
 
     new_nodes = new_nodes / np.linalg.norm(new_nodes, axis=1, keepdims=True)
@@ -285,10 +285,9 @@ def refine_rectrangles(
     rectangles: NDArray,
     factor: int,
     use_length: bool = True,
-    use_angle: bool = False,
+    angle: bool = False,
 ) -> Tuple[NDArray, NDArray]:
     """
-    Adapted from https://github.com/vedranaa/icosphere
     Given a base mesh, refine it using 1/factor factor
 
     Args:
@@ -344,7 +343,7 @@ def refine_rectrangles(
     new_nodes[num_nodes : num_nodes + num_edges * (factor - 1)] = split_edges(
         edge_extremes,
         num_segments=factor,
-        use_angle=use_angle,
+        use_angle=angle,
     )
 
     r = np.arange(factor - 1) + num_nodes
