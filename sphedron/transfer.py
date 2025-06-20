@@ -1,6 +1,4 @@
 """
-Author: Ayoub Ghriss, dev@ayghri.com
-
 License: Non-Commercial Use Only
 
 Permission is granted to use, copy, modify, and distribute this software
@@ -14,7 +12,7 @@ from typing import Literal, Callable
 from numpy.typing import NDArray
 import numpy as np
 
-from .mesh import Mesh
+from .mesh.base import Mesh
 from .helpers import query_nearest
 
 # from .utils import query_nearest
@@ -129,4 +127,6 @@ class MeshTransfer:
                 n_neighbors=self._n_neighbors,
             )
             if self._n_neighbors == 1:
-                self._nearest_senders = np.expand_dims(self._nearest_senders, -1)
+                self._nearest_senders = np.expand_dims(
+                    self._nearest_senders, -1
+                )

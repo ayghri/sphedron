@@ -1,6 +1,4 @@
 """
-Author: Ayoub Ghriss, dev@ayghri.com
-
 License: Non-Commercial Use Only
 
 Permission is granted to use, copy, modify, and distribute this software
@@ -15,7 +13,9 @@ from numpy.typing import NDArray
 import numpy as np
 
 
-def split_edges(edge_extremes: NDArray, num_segments: int, use_angle: bool = False):
+def split_edges(
+    edge_extremes: NDArray, num_segments: int, use_angle: bool = False
+):
     """
     Splits edges defined by pairs of extremities into equally spaced points.
 
@@ -40,7 +40,9 @@ def split_edges(edge_extremes: NDArray, num_segments: int, use_angle: bool = Fal
     t = np.arange(1, num_segments) / num_segments
     if use_angle:
         # shape (E,)
-        omegas = np.arccos(np.sum(edge_extremes[:, 0] * edge_extremes[:, 1], axis=-1))
+        omegas = np.arccos(
+            np.sum(edge_extremes[:, 0] * edge_extremes[:, 1], axis=-1)
+        )
         sin_om = np.sin(omegas)[:, None]
         u = np.sin(omegas[:, None] * (1 - t[None, :]))
         v = np.sin(omegas[:, None] * t[None, :]) / sin_om
@@ -159,9 +161,9 @@ def refine_triangles(
             triangle_nodes,
         ]  # nodes in template order
         # sort nodes in ordering
-        sub_triangles[triangle_idx * factor**2 : (triangle_idx + 1) * factor**2, :] = (
-            sorted_nodes[reordered_template]
-        )
+        sub_triangles[
+            triangle_idx * factor**2 : (triangle_idx + 1) * factor**2, :
+        ] = sorted_nodes[reordered_template]
         # Now geometry, computing positions of on face nodes.
         new_nodes[triangle_nodes, :] = triangle_interior(
             new_nodes[sorted_ab, :],
@@ -363,10 +365,18 @@ def refine_rectrangles(
         e_ad = rectangle[0, 3]
         # -- Already added in Step 1
         # Sorting the nodes on edges in the right order
-        sorted_ab = (edge_index[tuple(e_ab)] * (factor - 1) + r)[:: e_direction(e_ab)]
-        sorted_bc = (edge_index[tuple(e_bc)] * (factor - 1) + r)[:: e_direction(e_bc)]
-        sorted_cd = (edge_index[tuple(e_cd)] * (factor - 1) + r)[:: e_direction(e_cd)]
-        sorted_ad = (edge_index[tuple(e_ad)] * (factor - 1) + r)[:: e_direction(e_ad)]
+        sorted_ab = (edge_index[tuple(e_ab)] * (factor - 1) + r)[
+            :: e_direction(e_ab)
+        ]
+        sorted_bc = (edge_index[tuple(e_bc)] * (factor - 1) + r)[
+            :: e_direction(e_bc)
+        ]
+        sorted_cd = (edge_index[tuple(e_cd)] * (factor - 1) + r)[
+            :: e_direction(e_cd)
+        ]
+        sorted_ad = (edge_index[tuple(e_ad)] * (factor - 1) + r)[
+            :: e_direction(e_ad)
+        ]
         # --
         sorted_nodes = np.r_[
             rectangles[f],

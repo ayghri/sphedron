@@ -1,7 +1,5 @@
-# type: ignore
+# pylint: disable=C0415
 """
-Author: Ayoub Ghriss, dev@ayghri.com
-
 License: Non-Commercial Use Only
 
 Permission is granted to use, copy, modify, and distribute this software
@@ -11,21 +9,8 @@ Commercial use requires explicit permission.
 This software is provided "as is", without warranty of any kind.
 """
 
-
-from cartopy import feature
-from cartopy.io import shapereader
-from matplotlib.collections import LineCollection
-from matplotlib.pyplot import get_cmap
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-from shapely import geometry
-from shapely.ops import unary_union
-from shapely.prepared import prep
-import cartopy.crs as ccrs
-import matplotlib.colors
-import matplotlib.pyplot as plt
 import numpy as np
-
-from sphedron.mesh import Mesh
+from sphedron.mesh.base import Mesh
 
 
 def get_mesh_landmask(mesh: Mesh):
@@ -37,16 +22,23 @@ def get_mesh_landmask(mesh: Mesh):
     Returns: Array mask of shape (mesh.num_nodes)
 
     """
+    from cartopy.io import shapereader
+    from shapely import geometry
+    from shapely.ops import unary_union
+    from shapely.prepared import prep
 
     land_shp_fname = shapereader.natural_earth(
         resolution="10m",
         category="physical",
         name="land",
     )
-    land_geom = unary_union(list(shapereader.Reader(land_shp_fname).geometries()))
+    land_geom = unary_union(
+        list(shapereader.Reader(land_shp_fname).geometries())
+    )
     land = prep(land_geom)
     mask = [
-        land.contains(geometry.Point(*latlong[::-1])) for latlong in mesh.nodes_latlong
+        land.contains(geometry.Point(*latlong[::-1]))
+        for latlong in mesh.nodes_latlong
     ]
     return np.array(mask)
 
@@ -65,6 +57,12 @@ def plot_3d_mesh(
         color_faces: : whether to color faces
         title: Title of the plot
     """
+
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+    from matplotlib.pyplot import get_cmap
+    import matplotlib.colors
+
     nodes, faces = mesh.nodes, mesh.faces
     fig = plt.figure(figsize=(15, 10))
     poly = Poly3DCollection(nodes[faces])
@@ -84,10 +82,14 @@ def plot_3d_mesh(
 
         # blending face colors and face shading intensity
         rgb = np.array(
-            light_source.blend_hsv(rgb=jet, intensity=intensity.reshape(-1, 1, 1))
+            light_source.blend_hsv(
+                rgb=jet, intensity=intensity.reshape(-1, 1, 1)
+            )
         )
         # adding alpha value, may be left out
-        rgba = np.concatenate((rgb, 1.0 * np.ones(shape=(rgb.shape[0], 1, 1))), axis=2)
+        rgba = np.concatenate(
+            (rgb, 1.0 * np.ones(shape=(rgb.shape[0], 1, 1))), axis=2
+        )
         poly.set_facecolor(rgba.reshape(-1, 4))
     # creating mesh with given face colors
     poly.set_edgecolor("black")
@@ -117,7 +119,10 @@ def plot_3d_mesh(
 
 
 def plot_2d_mesh(
-    mesh: Mesh, title: str = "Mesh", scatter: bool = False, s: float = 0.1
+    mesh: Mesh,
+    title: str = "Mesh",
+    scatter: bool = False,
+    s: float = 0.1,
 ):
     """2d Plot of the mesh
 
@@ -127,6 +132,12 @@ def plot_2d_mesh(
         scatter: set to True to scatter plot the nodes
         s: scattered nodes size
     """
+
+    import matplotlib.pyplot as plt
+    from matplotlib.collections import LineCollection
+    import cartopy.crs as ccrs
+    from cartopy import feature
+
     plt.figure(figsize=(10, 16))
     ax = plt.axes(projection=ccrs.PlateCarree(central_longitude=180))
     # if edges is None:
@@ -161,6 +172,9 @@ def plot_nodes(
 ):
     """3d plot of the nodes"""
 
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
     fig = plt.figure(figsize=figsize)
     poly = Poly3DCollection(mesh.nodes[mesh.faces])
 
@@ -176,7 +190,9 @@ def plot_nodes(
     ax.set_xticks([-1, 0, 1])
     ax.set_yticks([-1, 0, 1])
     ax.set_zticks([-1, 0, 1])
-    for i, m in enumerate(mesh.nodes):  # plot each point + it's index as text above
+    for i, m in enumerate(
+        mesh.nodes
+    ):  # plot each point + it's index as text above
         ax.scatter(m[0], m[1], m[2], color="b")
         ax.text(m[0], m[1], m[2], str(i), size=20, zorder=10, color="k")
     ax.set_title(title)

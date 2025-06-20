@@ -10,27 +10,24 @@ Commercial use requires explicit permission.
 This software is provided "as is", without warranty of any kind.
 """
 
-from .mesh import Icosphere
-from .mesh import Octasphere
-from .mesh import Cubesphere
-from .mesh import NodesOnlyMesh
-from .mesh import UniformMesh
+from .mesh.refinables import Cubesphere
+from .mesh.refinables import Icosphere
+from .mesh.refinables import Octasphere
+from .mesh.refinables import UniformMesh
 
-from .mesh import NestedIcospheres
-from .mesh import NestedOctaspheres
-from .mesh import NestedCubespheres
+from .mesh.nested import NestedCubespheres
+from .mesh.nested import NestedIcospheres
+from .mesh.nested import NestedOctaspheres
 
 from .transfer import MeshTransfer
 
-
 __all__ = [
+    "Cubesphere",
     "Icosphere",
     "Octasphere",
-    "Cubesphere",
-    "NodesOnlyMesh",
     "UniformMesh",
+    "NestedCubespheres",
     "NestedIcospheres",
     "NestedOctaspheres",
-    "NestedCubespheres",
     "MeshTransfer",
 ]

@@ -1,6 +1,4 @@
 """
-Author: Ayoub Ghriss, dev@ayghri.com
-
 License: Non-Commercial Use Only
 
 Permission is granted to use, copy, modify, and distribute this software
