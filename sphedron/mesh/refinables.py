@@ -163,35 +163,36 @@ class Cubesphere(RefinableMesh, RectangularMesh):
         return nodes, faces
 
 
-
 class UniformMesh(Mesh):  # pylint: disable=W0223
     """Mesh of uniformly distributed latitude and longitude"""
 
-    def __init__(self, resolution=1.0):
+    def __init__(
+        self,
+        resolution=1.0,
+        uniform_lats=Optional[NDArray],
+        uniform_longs=Optional[NDArray],
+    ):
         self.resolution = resolution
-        self.multiplier_long = int(180.0 / resolution)
-        self.multiplier_lat = int(90.0 / resolution)
-        self.uniform_long = (
-            np.arange(-self.multiplier_long, self.multiplier_long, 1)
-            * resolution
-        )
-        self.uniform_lat = (
-            np.arange(-self.multiplier_lat, self.multiplier_lat + 1, 1)
-            * resolution
-        )
-        self.uniform_latlons = (
-            np.array(np.meshgrid(self.uniform_lat, self.uniform_long))
+        if uniform_lats is not None or uniform_longs is not None:
+            self.uniform_longs = np.arange(resolution / 2, 360, resolution)
+            self.uniform_lats = np.arange(-90 + resolution / 2, 90, resolution)
+        else:
+            self.uniform_longs = uniform_longs
+            self.uniform_lats = uniform_lats
+
+        self.uniform_latlongs = (
+            np.array(np.meshgrid(self.uniform_lats, self.uniform_longs))
             .reshape(2, -1)
             .T
         )
 
-        nodes_xyz = _transform.latlong_to_xyz(self.uniform_latlons)
+        nodes_xyz = _transform.latlong_to_xyz(self.uniform_latlongs)
         faces = np.arange(nodes_xyz.shape[0])[:, np.newaxis].repeat(3, axis=1)
         super().__init__(nodes_xyz, faces)
 
     def reshape(self, values):
         vals = values.T.reshape(
-            self.uniform_long.shape[0], self.uniform_lat.shape[0], -1
+            self.uniform_longs.shape[0], self.uniform_lats.shape[0], -1
         ).transpose(1, 0, 2)
         if values.ndim == 1:
             return vals[..., 0]
