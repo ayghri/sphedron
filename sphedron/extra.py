@@ -97,7 +97,7 @@ def plot_3d_mesh(
 
     # and now -- visualization!
     # ax = Axes3D(fig)
-    ax = fig.add_subplot(projection="3d")
+    ax = fig.add_subplot(projection="3d")  # type: ignore
     ax.add_collection3d(poly)
     ax.set_xlim(-1, 1)
     ax.set_ylim(-1, 1)

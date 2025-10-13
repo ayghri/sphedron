@@ -1,21 +1,20 @@
-from sphedron import Icosphere, NestedIcospheres
+import pytest
 import numpy as np
-from numpy.testing import assert_array_less
-from numpy.testing import assert_array_equal
-
-import unittest
+from numpy.testing import assert_array_less, assert_array_equal
+from sphedron import Icosphere, NestedIcospheres
 
 
-class TestMeshQuery(unittest.TestCase):
-    """test mesh queries based on radius/#neighbors"""
+class TestMeshQuery:
+    """Test mesh queries based on radius/#neighbors."""
 
-    def setUp(self) -> None:
+    @pytest.fixture(autouse=True)
+    def setup_meshes(self):
+        """Set up receiver and sender meshes for testing."""
         self.receiver_mesh = Icosphere.from_base(refine_factor=64)
         self.sender_mesh = NestedIcospheres(factors=[1, 2, 2, 2, 2, 2, 2])
 
     def test_radius(self):
-        """Check if query_radius edges are actually within radius"""
-
+        """Check if query_radius edges are actually within radius."""
         radius = 0.022
         nearest_s2r = self.sender_mesh.query_edges_from_radius(
             receiver_mesh=self.receiver_mesh, radius=radius
@@ -31,8 +30,7 @@ class TestMeshQuery(unittest.TestCase):
 
     def test_neighbors(self):
         """Check if query neighbors for some random receiver node
-        edges are among nearest neighbors"""
-
+        edges are among nearest neighbors."""
         n_neighbors = 10
         nearest_s2r = self.sender_mesh.query_edges_from_neighbors(
             receiver_mesh=self.receiver_mesh, n_neighbors=n_neighbors
@@ -43,5 +41,60 @@ class TestMeshQuery(unittest.TestCase):
         nearest_senders = np.sort(np.argsort(dists)[:n_neighbors])
         assert_array_equal(s_nodes, nearest_senders)
 
+    # def test_radius_edge_cases(self):
+    #     """Test edge cases for radius queries."""
+    #     # Very small radius should return no edges
+    #     small_radius = 0.001
+    #     edges = self.sender_mesh.query_edges_from_radius(
+    #         receiver_mesh=self.receiver_mesh, radius=small_radius
+    #     )
+    #     assert len(edges) >= 0  # May be empty for small radius
 
-tests = [TestMeshQuery]
+    #     # Very large radius should return many edges
+    #     large_radius = 2.0
+    #     edges = self.sender_mesh.query_edges_from_radius(
+    #         receiver_mesh=self.receiver_mesh, radius=large_radius
+    #     )
+    #     assert len(edges) > 0
+
+    def test_neighbors_edge_cases(self):
+        """Test edge cases for neighbor queries."""
+        # Single neighbor
+        edges = self.sender_mesh.query_edges_from_neighbors(
+            receiver_mesh=self.receiver_mesh, n_neighbors=1
+        )
+        assert len(edges) > 0
+
+        # More neighbors than available sender nodes
+        max_neighbors = min(100, self.sender_mesh.num_nodes)
+        edges = self.sender_mesh.query_edges_from_neighbors(
+            receiver_mesh=self.receiver_mesh, n_neighbors=max_neighbors
+        )
+        assert len(edges) > 0
+
+    @pytest.mark.parametrize("radius", [0.01, 0.05, 0.1])
+    def test_radius_parametrized(self, radius):
+        """Test radius queries with different radius values."""
+        edges = self.sender_mesh.query_edges_from_radius(
+            receiver_mesh=self.receiver_mesh, radius=radius
+        )
+        
+        if len(edges) > 0:
+            dists = np.linalg.norm(
+                self.sender_mesh.nodes[edges[:, 0]]
+                - self.receiver_mesh.nodes[edges[:, 1]],
+                axis=1,
+            )
+            assert_array_less(dists, radius, strict=False)
+
+    @pytest.mark.parametrize("n_neighbors", [1, 5, 10])
+    def test_neighbors_parametrized(self, n_neighbors):
+        """Test neighbor queries with different neighbor counts."""
+        edges = self.sender_mesh.query_edges_from_neighbors(
+            receiver_mesh=self.receiver_mesh, n_neighbors=n_neighbors
+        )
+        
+        # Check that each receiver node has at most n_neighbors connections
+        for receiver_idx in range(self.receiver_mesh.num_nodes):
+            receiver_edges = edges[edges[:, 1] == receiver_idx]
+            assert len(receiver_edges) <= n_neighbors

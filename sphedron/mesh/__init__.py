@@ -19,12 +19,12 @@ from .nested import NestedIcospheres
 from .nested import NestedOctaspheres
 
 __all__ = [
-    "NodesOnlyMesh",
-    "Cubesphere",
     "Icosphere",
+    "Cubesphere",
     "Octasphere",
     "NestedCubespheres",
     "NestedIcospheres",
     "NestedOctaspheres",
     "UniformMesh",
+    "NodesOnlyMesh",
 ]

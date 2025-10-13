@@ -177,15 +177,15 @@ def refine_triangles(
 
 
 def triangle_template(nu: int) -> NDArray[np.int64]:
-    """
+    r"""
     Template for linking subfaces                  0
     in a subdivision of a face.                   / \
     Returns faces with node                      1---2
-    indexing given by reading order.            / \\/ \
+    indexing given by reading order.            / \ / \
                                                3---4---5
-                                              / \\/ \\/ \
+                                              / \ / \ / \
        Illustration for nu=4:                6---7---8---9
-                                            / \\/ \\/ \\/ \
+                                            / \ / \ / \ / \
                                            10--11--12--13--14
 
     Args:
@@ -211,15 +211,15 @@ def triangle_template(nu: int) -> NDArray[np.int64]:
 
 
 def triangles_order(nu: int):
-    """
+    r"""
     Permutation for ordering of                 0
     face nodes which transformes               / \
     reading-order indexing into indexing      3---6
-    first corners nodes, then on-edges       / \\/ \
+    first corners nodes, then on-edges       / \ / \
     nodes, and then on-face nodes           4---12--7
-    (as illustrated).                      / \\/ \\/ \
+    (as illustrated).                      / \ / \ / \
                                           5---13--14--8
-                                         / \\/ \\/ \\/ \\
+                                         / \ / \ / \ / \
                                         1---9--10--11---2
     Args:
         nu (int): factor for which to generate the ordering
@@ -244,17 +244,17 @@ def triangles_order(nu: int):
 
 
 def triangle_interior(ab: NDArray, ac: NDArray, use_angle: bool = False):
-    """
+    r"""
     Returns coordinates of the inside nodes (marked by star) for subdivision
     of the face ABC when given coordinates of the on-edge nodesAB[i] and AC[i].                     
              A
             / \
           AB0--AC0
-          / \\/ \
-        AB1---*--AC1
-        / \\/ \\/ \
+          / \ / \
+        AB1--*--AC1
+        / \ / \ / \
      AB2---*---*---AC2
-      / \\/ \\/ \\/ \
+      / \ / \ / \ / \
      B-BC1--BC2--BC3-C
 
     Args:
@@ -286,8 +286,7 @@ def refine_rectrangles(
     nodes: NDArray,
     rectangles: NDArray,
     factor: int,
-    use_length: bool = True,
-    angle: bool = False,
+    use_angle: bool = False,
 ) -> Tuple[NDArray, NDArray]:
     """
     Given a base mesh, refine it using 1/factor factor
@@ -345,7 +344,7 @@ def refine_rectrangles(
     new_nodes[num_nodes : num_nodes + num_edges * (factor - 1)] = split_edges(
         edge_extremes,
         num_segments=factor,
-        use_angle=angle,
+        use_angle=use_angle,
     )
 
     r = np.arange(factor - 1) + num_nodes
@@ -393,7 +392,7 @@ def refine_rectrangles(
         new_nodes[rect_nodes, :] = rectangle_interior(
             new_nodes[sorted_ad, :],
             new_nodes[sorted_bc, :],
-            use_length=use_length,
+            use_length=use_angle,
         )
     # normalize nodes to position them on the unit sphere
     new_nodes = new_nodes / np.linalg.norm(new_nodes, axis=1, keepdims=True)
@@ -402,14 +401,14 @@ def refine_rectrangles(
 
 
 def rectangle_template(nu: int) -> NDArray[np.int64]:
-    """
-    Template for linking subfaces    0===1===2===3
+    r"""
+    Template for linking subfaces    0---1---2---3
     in a subdivision of a face.      |   |   |   |
-    Returns faces with node          4===5===6===7
+    Returns faces with node          4---5---6---7
     indexing given by reading order. |   |   |   |
-                                     8===9==10==11
+                                     8---9---10--11
                                      |   |   |   |
-       Illustration for nu=3:        12==13==14==15
+       Illustration for nu=3:        12--13--14--15
 
 
 
@@ -432,14 +431,14 @@ def rectangle_template(nu: int) -> NDArray[np.int64]:
 
 
 def rectangles_order(nu: int):
-    """
-    Permutation for ordering of           0==4===5===1
-    face nodes which transformes          |  |   |   |
-    reading-order indexing into indexing  6==12==13==8
-    first corners nodes, then on-edges    |  |   |   |
-    nodes, and then on-face nodes         7==14==15==9
-    (as illustrated).                     |  |   |   |
-                                          3==11==10==2
+    r"""
+    Permutation for ordering of           0---4---5---1
+    face nodes which transformes          |   |   |   |
+    reading-order indexing into indexing  6---12--13--8
+    first corners nodes, then on-edges    |   |   |   |
+    nodes, and then on-face nodes         7---14--15--9
+    (as illustrated).                     |   |   |   |
+                                          3---11--10--2
     Args:
         nu (int): factor for which to generate the ordering
 
@@ -471,15 +470,15 @@ def rectangle_interior(ad: NDArray, bc: NDArray, use_length: bool = True):
      These should be returned in the correct order as in rectangles_order
 
      demo for factor 4
-     A==AB0==AB1==AB2==B
-     |   |    |    |   |
-    AD0==*====*====*==BC0
-     |   |    |    |   |
-    AD1==*====*====*==BC1
-     |   |    |    |   |
-    AD2==*====*====*==BC2
-     |   |    |    |   |
-     D==DC0==DC1==DC2==C
+     A---AB0--AB1--AB2--B
+     |   |    |    |    |
+    AD0--*----*----*---BC0
+     |   |    |    |    |
+    AD1--*----*----*---BC1
+     |   |    |    |    |
+    AD2--*----*----*---BC2
+     |   |    |    |    |
+     D---DC0--DC1--DC2--C
 
      Args:
          AD: ndarray, shape(factor-1,3)

@@ -202,7 +202,9 @@ class RBFRegridder:
         Ns = self.meta["Ns"]
         if values.ndim == 1:
             if values.shape[0] != Ns:
-                raise ValueError("Expected shape (Ns,), got %r" % (values.shape,))
+                raise ValueError(
+                    "Expected shape (Ns,), got %r" % (values.shape,)
+                )
             return self.W @ values
         if values.ndim == 2:
             # (Ns, d) or (T, Ns)
@@ -211,7 +213,8 @@ class RBFRegridder:
             if values.shape[1] == Ns:
                 return values @ self.W.T  # -> (T, Nt)
         raise ValueError(
-            "Unsupported shape %r. Use (Ns,), (Ns, d) or (T, Ns)." % (values.shape,)
+            "Unsupported shape %r. Use (Ns,), (Ns, d) or (T, Ns)."
+            % (values.shape,)
         )
 
 

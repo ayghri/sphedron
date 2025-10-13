@@ -1,14 +1,9 @@
+# License: Non-Commercial Use Only
 """
-License: Non-Commercial Use Only
-
-Permission is granted to use, copy, modify, and distribute this software
-for non-commercial purposes only, with attribution to the original author.
-Commercial use requires explicit permission.
-
-This software is provided "as is", without warranty of any kind.
+We define here various meshes based on triangular and rectangular refinement.
 """
 
-from typing import Tuple
+from typing import Tuple, Optional
 from numpy.typing import NDArray
 import numpy as np
 import sphedron.transform as _transform
@@ -16,10 +11,9 @@ import sphedron.transform as _transform
 from .base import TriangularMesh
 from .base import RectangularMesh
 from .base import Mesh
-from .base import RefinableMesh
 
 
-class Icosphere(TriangularMesh, RefinableMesh):
+class Icosphere(TriangularMesh):
     """
     A triangular mesh generated from a refined icosahedron.
     Rotation angle is chosen to match Graphcast paper.
@@ -29,7 +23,7 @@ class Icosphere(TriangularMesh, RefinableMesh):
     rotation_axis = "y"
 
     @staticmethod
-    def _base() -> Tuple[NDArray, NDArray]:
+    def base() -> Tuple[NDArray, NDArray]:
         """Provides the base 12-node, 20-face icosahedron geometry."""
         phi = (1 + np.sqrt(5)) / 2
         nodes = np.array(
@@ -72,11 +66,11 @@ class Icosphere(TriangularMesh, RefinableMesh):
         return nodes, faces
 
 
-class Octasphere(RefinableMesh, TriangularMesh):
+class Octasphere(TriangularMesh):
     """A triangular mesh generated from a refined octahedron."""
 
     @staticmethod
-    def _base() -> Tuple[NDArray, NDArray]:
+    def base() -> Tuple[NDArray, NDArray]:
         """Provides the base 6-node, 8-face octahedron geometry."""
         vertices = np.array(
             [
@@ -104,7 +98,7 @@ class Octasphere(RefinableMesh, TriangularMesh):
         return vertices, faces
 
 
-class Cubesphere(RefinableMesh, RectangularMesh):
+class Cubesphere(RectangularMesh):
     """Represents an cubesphere mesh, square-based.
 
     Attributes:
@@ -116,7 +110,7 @@ class Cubesphere(RefinableMesh, RectangularMesh):
     rotation_axis = "y"
 
     @staticmethod
-    def _base():
+    def base():
         """
               Create the base cube
 
