@@ -1,9 +1,21 @@
 Spherical Polyhedral Meshes
-=====================================
+
+
+.. note::
+
+   This project is under active development.
+
+
+Contents
+--------
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+    :caption: Understanding the meshes
 
-   icosphere
-   modules
+    tutorials/meshes
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Package Reference
+
+   modules/meshes

@@ -11,6 +11,7 @@ This software is provided "as is", without warranty of any kind.
 from typing import Literal, Callable
 from numpy.typing import NDArray
 import numpy as np
+from scipy.interpolate import RBFInterpolator
 
 from .mesh.base import Mesh
 from .helpers import query_nearest
@@ -130,3 +131,22 @@ class MeshTransfer:
                 self._nearest_senders = np.expand_dims(
                     self._nearest_senders, -1
                 )
+
+    def rbf_transfer(
+        self,
+        sent_values,
+        kernel="thin_plate_spline",
+        neighbors=8,
+        smoothing=0.0,
+        epsilon=None,
+        degree=None,
+    ):
+        return RBFInterpolator(
+            self._sender_mesh.nodes,
+            sent_values,
+            kernel=kernel,
+            neighbors=neighbors,
+            smoothing=smoothing,
+            epsilon=epsilon,
+            degree=degree,
+        )(self._receiver_mesh.nodes)
