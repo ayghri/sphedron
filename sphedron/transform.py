@@ -8,6 +8,7 @@ Commercial use requires explicit permission.
 This software is provided "as is", without warranty of any kind.
 """
 
+from typing import List
 from numpy.typing import NDArray
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -86,20 +87,23 @@ def sender2receiver_edge_coords(
     return senders_wrt_receivers - receivers_wrt_receivers
 
 
-def rotate_nodes(nodes_xyz: NDArray, axis: str, angle: float) -> NDArray:
+def rotate_nodes(
+    nodes_xyz: NDArray,
+    axis: str,
+    angles: float | List[float],
+) -> NDArray:
     """
     Rotate the mesh nodes around a specified axis by a given angle.
 
     Args:
         nodes_xyz: Cartesian coordinates of the nodes, shape (N, 3)
         axis: axis around which to rotate the nodes, scipy's Euler rotation.
-        angle: The angle (radian) by which to rotate the nodes.
+        angles: The angle (radian) by which to rotate the nodes.
 
     Returns:
         The rotated nodes of shape (num_nodes, 3).
     """
-    assert len(axis) == 1
-    rotation = Rotation.from_euler(seq=axis, angles=angle).as_matrix()
+    rotation = Rotation.from_euler(seq=axis, angles=angles).as_matrix()
     nodes_xyz = np.dot(nodes_xyz, rotation.T)
     return nodes_xyz
 

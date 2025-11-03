@@ -84,7 +84,7 @@ class Mesh:
             nodes = _transform.rotate_nodes(
                 nodes,
                 axis=cls.rotation_axis,
-                angle=cls.rotation_angle,
+                angles=cls.rotation_angle,
             )
 
         # Always call _refine to keep behavior consistent with previous API.
@@ -143,7 +143,7 @@ class Mesh:
             nodes = _transform.rotate_nodes(
                 nodes,
                 axis=cls.rotation_axis,
-                angle=cls.rotation_angle,
+                angles=cls.rotation_angle,
             )
 
         # Always call _refine to match semantics of from_base.
