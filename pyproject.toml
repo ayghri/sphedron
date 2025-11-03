@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sphedron"
-version = "0.1.0"
+version = "0.1.1"
 description = "Polyhedral meshes on the unit sphere"
 authors = ["Ayoub Ghriss <dev@ayghri.com>"]
 readme = "README.md"
