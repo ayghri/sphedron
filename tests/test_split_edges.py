@@ -54,7 +54,7 @@ class TestSplitEdges:
     def test_linear_split_equal_euclidean_spacing(self, unit_edge):
         """use_angle=False: points are equally spaced in Euclidean distance."""
         pts = split_edges(unit_edge, num_segments=5, use_angle=False)
-        # Points are NOT normalized — check raw Euclidean spacing
+        # Points are NOT normalized -- check raw Euclidean spacing
         all_pts = np.vstack([unit_edge[0, 0], pts, unit_edge[0, 1]])
         dists = np.linalg.norm(np.diff(all_pts, axis=0), axis=1)
         assert_allclose(dists, dists[0], atol=1e-12)

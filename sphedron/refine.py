@@ -66,7 +66,7 @@ def refine_triangles(
 ) -> Tuple[NDArray, NDArray]:
     """Refine a triangular mesh by subdividing each face.
 
-    Vectorized implementation — all edge splitting, interior computation,
+    Vectorized implementation -- all edge splitting, interior computation,
     and connectivity wiring are batched into array operations with no
     per-face Python loop.
 
@@ -114,7 +114,7 @@ def refine_triangles(
     # --- Step 1: split all edges in one batch call ---
     edge_extremes = nodes[edges_unique]  # (E, 2, 3)
     edge_node_coords = split_edges(edge_extremes, nu, use_angle)
-    # shape (E*ns, 3) — stored as E blocks of ns nodes each
+    # shape (E*ns, 3) -- stored as E blocks of ns nodes each
     new_nodes[n_nodes : n_nodes + n_edges * ns] = edge_node_coords
 
     # --- Step 2: build per-face edge-node indices (vectorized) ---
@@ -463,7 +463,7 @@ def refine_rectrangles(
 ) -> Tuple[NDArray, NDArray]:
     """Refine a rectangular mesh by subdividing each face.
 
-    Vectorized implementation — all edge splitting, interior computation,
+    Vectorized implementation -- all edge splitting, interior computation,
     and connectivity wiring are batched into array operations with no
     per-face Python loop.
 

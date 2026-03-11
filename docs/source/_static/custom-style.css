@@ -29,7 +29,3 @@ dl.py.property {
     display: block !important;
 }
 
-/* Show primary sidebar on homepage (pydata theme hides it by default) */
-.bd-sidebar-primary.hide-on-wide {
-    display: block !important;
-}

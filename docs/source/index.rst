@@ -1,10 +1,12 @@
+:html_theme.sidebar_secondary.remove:
+
 Sphedron
 ========
 
 **Polyhedron-based Meshes on the Sphere**
 
-Sphedron provides polyhedral meshes on the unit sphere — icosphere,
-octasphere, cubesphere, and uniform lat/lon grids — with fast
+Sphedron provides polyhedral meshes on the unit sphere -- icosphere,
+octasphere, cubesphere, and uniform lat/lon grids -- with fast
 sparse-matrix regridding between any pair of meshes.
 
 .. note::

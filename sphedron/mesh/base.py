@@ -377,12 +377,12 @@ class NodesOnlyMesh(Mesh):
 
     @staticmethod
     def refine(nodes, faces, factor, use_angle=False, **kwargs):
-        """Not supported — NodesOnlyMesh has no face connectivity."""
+        """Not supported -- NodesOnlyMesh has no face connectivity."""
         raise TypeError("NodesOnlyMesh does not support refinement.")
 
     @staticmethod
     def base():
-        """Not supported — NodesOnlyMesh has no base geometry."""
+        """Not supported -- NodesOnlyMesh has no base geometry."""
         raise TypeError("NodesOnlyMesh does not support base geometry.")
 
     def faces2triangles(self, faces: NDArray) -> NDArray:

@@ -47,6 +47,7 @@ html_theme_options = {
 }
 
 html_sidebars = {
+    "index": [],
     "**": ["sidebar-nav-bs"],
 }
 

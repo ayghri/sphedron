@@ -26,7 +26,7 @@ Quick start
    sender   = Icosphere.from_base(refine_factor=256)   # 655,362 nodes
    receiver = UniformMesh(resolution=0.5)               # 259,200 nodes
 
-   # Create the regridder — all config in the constructor
+   # Create the regridder -- all config in the constructor
    regridder = MeshTransfer(sender, receiver,
                             method="local_rbf", k=16, degree=0)
 
@@ -59,13 +59,13 @@ the source and target meshes together with all interpolation parameters:
 
 Key properties and methods:
 
-- ``regridder.transform(data)`` — regrid data (lazy weight build).
-- ``regridder @ data`` — same as ``transform``.
-- ``regridder.weights`` — the sparse CSR matrix (lazy build).
-- ``regridder.shape`` — ``(n_receiver, n_sender)``.
-- ``regridder.build_weights(...)`` — explicit build; any argument
+- ``regridder.transform(data)`` -- regrid data (lazy weight build).
+- ``regridder @ data`` -- same as ``transform``.
+- ``regridder.weights`` -- the sparse CSR matrix (lazy build).
+- ``regridder.shape`` -- ``(n_receiver, n_sender)``.
+- ``regridder.build_weights(...)`` -- explicit build; any argument
   updates the stored configuration.
-- ``repr(regridder)`` — shows config and build status::
+- ``repr(regridder)`` -- shows config and build status::
 
     MeshTransfer(86,096 → 64,800, method='local_rbf', k=16,
                  kernel='thin_plate_spline', degree=0, built)
@@ -195,7 +195,7 @@ Icosphere (655,362 nodes, factor=256) to a UniformMesh (259,200 nodes,
      - 3.1ms
 
 ``local_rbf(k=16, d=0)`` achieves the same accuracy as ``barycentric``
-(4.4% relative error) in **2.6s vs 81s** — a 31× speedup on weight
+(4.4% relative error) in **2.6s vs 81s** -- a 31× speedup on weight
 construction, with apply times under 3ms.
 
 
@@ -206,7 +206,7 @@ A more rigorous test: regrid 5 CESM2 ocean variables (SSH, SST, SHF,
 TAUX, TAUY) from the curvilinear POP grid (86,096 ocean cells) through
 an intermediate grid and back.  We subtract the temporal mean (1332
 monthly snapshots, 1990–2100) and measure the **centered-field roundtrip
-error** — the relative error on anomalies, averaged over all timesteps.
+error** -- the relative error on anomalies, averaged over all timesteps.
 
 .. list-table:: Uniform 1° intermediate (64,800 nodes)
    :header-rows: 1
@@ -228,7 +228,7 @@ error** — the relative error on anomalies, averaged over all timesteps.
      - 2.60%
      - 2.70%
      - 3.70%
-     - —
+     - --
      - 38ms
    * - ``nearest``
      - 12.81%
@@ -296,7 +296,7 @@ error** — the relative error on anomalies, averaged over all timesteps.
      - 2.60%
      - 2.70%
      - 3.70%
-     - —
+     - --
      - 38ms
    * - ``nearest``
      - 7.53%
@@ -346,14 +346,14 @@ error** — the relative error on anomalies, averaged over all timesteps.
 
 Key observations:
 
-- **Sphedron beats xESMF bilinear on every variable** — 2.44% vs 3.70%
+- **Sphedron beats xESMF bilinear on every variable** -- 2.44% vs 3.70%
   mean at Uniform 1°, and **1.67%** at Icosphere-128.
 - **Apply is 14–50× faster** than xESMF's official ``regridder(data)``
   API (sparse matmul vs ESMF's internal routines).
 - **TPS kernel with degree=0** is the best overall choice.
 - SSH has the highest error (~5.8% at Icosphere-128) due to fine-scale
   ocean dynamics; all other variables are under 1.4%.
-- Increasing *k* beyond 16 gives diminishing returns — the error floor
+- Increasing *k* beyond 16 gives diminishing returns -- the error floor
   is set by the intermediate grid resolution, not interpolation order.
 
 

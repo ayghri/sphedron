@@ -90,7 +90,7 @@ def _barycentric_weights(
     mesh and computes barycentric coordinates.
 
     Args:
-        sender_mesh: The sender mesh (any type — quads are triangulated).
+        sender_mesh: The sender mesh (any type -- quads are triangulated).
         receiver_nodes: Query points, shape (M, 3).
 
     Returns:
@@ -316,7 +316,7 @@ def _local_rbf_weights(
                 w[attempt] = _build_augmented(
                     Phi[attempt], phi[attempt], P[attempt], p_q[attempt])
 
-            # Phase 3: post-solve safety net — catch remaining
+            # Phase 3: post-solve safety net -- catch remaining
             # instabilities not detected by SVD on P alone
             if attempt.any():
                 max_abs = np.max(np.abs(w[attempt]), axis=1)
@@ -544,7 +544,7 @@ class MeshTransfer:
         Args:
             data: Values on the sender grid.  Shape ``(N,)`` for a
                 single field, ``(N, d)`` for *d* fields, or
-                ``(N, ...)`` for batched data — where ``N`` is
+                ``(N, ...)`` for batched data -- where ``N`` is
                 ``sender.num_nodes``.
 
         Returns:

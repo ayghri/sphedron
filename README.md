@@ -2,22 +2,21 @@
 
 A python package for creating refinable polyhedral meshes on the sphere. The refinement is either rectangle or triangle based.
 
-The was developed as a component of Graph Neural Networks (GNN) for Geospatial ML projects, and it's designed with that in mind.
+This was developed as a component of Graph Neural Networks (GNN) for Geospatial ML projects, and it's designed with that in mind.
 
 The package implements:
 
-- Icosphere 
+- Icosphere
 - Octasphere
 - Cubesphere
-- Uniform Latitude/Longitude 
+- Uniform Latitude/Longitude
 
-It is also straighforward to extend it to include other triangular/rectangular meshes.
+It is also straightforward to extend it to include other triangular/rectangular meshes.
 
-You can find code examples here:
+You can find code examples in the [examples/](./examples) folder.
 
-If you're looking to implement your own rectangle/triangle based mesh:
-
-For the full documentation:
+To understand the inner workings of a mesh and how it is refined, refer to the
+[Icosphere tutorial](./docs/source/tutorials/icosphere.rst).
 
 ## Requirements
 - python >= 3.10
@@ -31,6 +30,15 @@ Optional dependencies:
 
 ## Install
 
+```bash
+pip install .
+```
 
-To understand the inner workings of a mesh and how its refined, refer to
-[Icosphere Mesh Documentation](./docs/icosphere.md)
+## Using notebooks in ReadTheDocs
+
+This project's Sphinx docs can render Jupyter notebooks via `nbsphinx`.
+
+- Notebook sources live under `docs/source/notebooks/` (copied from `examples/` as needed).
+- The docs build defaults to **not executing** notebooks (it renders the saved inputs/outputs).
+- To execute notebooks locally during a Sphinx build:
+	- `SPHEDRON_DOCS_EXECUTE_NOTEBOOKS=auto`
