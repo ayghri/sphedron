@@ -229,7 +229,7 @@ error** — the relative error on anomalies, averaged over all timesteps.
      - 2.70%
      - 3.70%
      - —
-     - 1.78ms
+     - 38ms
    * - ``nearest``
      - 12.81%
      - 4.00%
@@ -297,7 +297,7 @@ error** — the relative error on anomalies, averaged over all timesteps.
      - 2.70%
      - 3.70%
      - —
-     - 1.78ms
+     - 38ms
    * - ``nearest``
      - 7.53%
      - 1.99%
@@ -348,8 +348,8 @@ Key observations:
 
 - **Sphedron beats xESMF bilinear on every variable** — 2.44% vs 3.70%
   mean at Uniform 1°, and **1.67%** at Icosphere-128.
-- **Apply is 2–8× faster** than xESMF (sparse matmul vs ESMF's internal
-  routines).
+- **Apply is 14–50× faster** than xESMF's official ``regridder(data)``
+  API (sparse matmul vs ESMF's internal routines).
 - **TPS kernel with degree=0** is the best overall choice.
 - SSH has the highest error (~5.8% at Icosphere-128) due to fine-scale
   ocean dynamics; all other variables are under 1.4%.

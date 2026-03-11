@@ -21,15 +21,6 @@ class NestedMeshes:
             refinement.
         rotate: Rotate the base mesh using the class rotation parameters.
 
-    Attributes:
-        finest_mesh (Mesh): The mesh at the highest refinement level.
-        nodes (NDArray): Nodes of the finest mesh, shape ``(N, 3)``.
-        nodes_latlong (NDArray): Finest mesh nodes in ``(lat, lon)`` degrees.
-        num_edges (int): Total edge count across all levels.
-        num_faces (int): Total face count across all levels.
-        num_nodes (int): Node count of the finest mesh.
-        edges (NDArray): All edges from every level, concatenated.
-        faces (NDArray): All faces from every level, concatenated.
     """
 
     _base_mesh_cls: Type[Mesh] = Mesh

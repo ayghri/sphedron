@@ -95,11 +95,6 @@ class UniformMesh(RectangularMesh):
         uniform_longs: Custom longitude values in degrees. Must be
             provided together with *uniform_lats*.
 
-    Attributes:
-        resolution (float): Grid spacing in degrees.
-        uniform_lats (NDArray): Latitude values in degrees.
-        uniform_longs (NDArray): Longitude values in degrees.
-        uniform_latlongs (NDArray): All ``(lat, lon)`` pairs, shape ``(N, 2)``.
     """
 
     def __init__(

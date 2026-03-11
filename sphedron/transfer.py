@@ -396,11 +396,6 @@ class MeshTransfer:
                                  method="local_rbf", k=16, degree=0)
         sst_regridded = regridder.transform(sst_ocean)
 
-    Attributes:
-        shape (tuple): ``(num_receiver, num_sender)``.
-        weights (csr_matrix): The sparse weight matrix. Built lazily on
-            first access.
-
     Example::
 
         regridder = MeshTransfer(ocean_mesh, target_grid,

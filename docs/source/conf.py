@@ -38,10 +38,16 @@ html_favicon = "_static/logo.svg"
 html_theme_options = {
     "show_toc_level": 2,
     "navigation_with_keys": False,
+    "show_nav_level": 0,
+    "navigation_depth": 4,
     "logo": {
         "image_light": "_static/logo.svg",
         "image_dark": "_static/logo.svg",
     },
+}
+
+html_sidebars = {
+    "**": ["sidebar-nav-bs"],
 }
 
 html_css_files = ["custom-style.css"]

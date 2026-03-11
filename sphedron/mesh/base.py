@@ -36,26 +36,6 @@ class Mesh:
         nodes: Cartesian coordinates of mesh nodes, shape ``(N, 3)``.
         faces: Face definitions as indices into *nodes*, shape ``(F, K)``
             where K is 3 for triangles or 4 for rectangles.
-
-    Attributes:
-        rotation_axes (str): Axis used for rotations (``'x'``, ``'y'``,
-            or ``'z'``).
-        rotation_angles (float): Angle in radians for node rotations.
-        edges (NDArray): Directed edges of the mesh, shape ``(E, 2)``.
-        edges_symmetric (NDArray): Undirected edges (both directions),
-            shape ``(2E, 2)``.
-        edges_unique (NDArray): Unique directed edges (lower to higher
-            index), shape ``(E_u, 2)``.
-        faces (NDArray): Face indices of retained faces, shape ``(F', K)``.
-        faces_partial (NDArray): Faces including partially masked nodes.
-        nodes (NDArray): Cartesian coordinates of retained nodes,
-            shape ``(N', 3)``.
-        nodes_latlong (NDArray): Retained nodes in ``(latitude, longitude)``
-            degrees, shape ``(N', 2)``.
-        num_edges (int): Number of directed edges.
-        num_faces (int): Number of retained faces.
-        num_nodes (int): Number of retained nodes.
-        triangles (NDArray): Triangulated faces, shape ``(T, 3)``.
     """
 
     rotation_axes = "y"

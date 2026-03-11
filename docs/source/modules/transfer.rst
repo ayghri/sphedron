@@ -7,6 +7,10 @@ Mesh Transfer
 .. autoclass:: sphedron.transfer.MeshTransfer
    :no-members:
 
+   .. rubric:: Attributes
+
+   .. autoproperty:: weights
+
    .. rubric:: Methods
 
    .. autosummary::

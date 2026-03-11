@@ -10,6 +10,20 @@ Base Classes
 .. autoclass:: sphedron.mesh.base.Mesh
    :no-members:
 
+   .. rubric:: Attributes
+
+   .. autoproperty:: edges
+   .. autoproperty:: edges_symmetric
+   .. autoproperty:: edges_unique
+   .. autoproperty:: faces
+   .. autoproperty:: faces_partial
+   .. autoproperty:: nodes
+   .. autoproperty:: nodes_latlong
+   .. autoproperty:: num_edges
+   .. autoproperty:: num_faces
+   .. autoproperty:: num_nodes
+   .. autoproperty:: triangles
+
    .. rubric:: Methods
 
    .. autosummary::
@@ -128,6 +142,17 @@ Nested Meshes
 
 .. autoclass:: sphedron.mesh.nested.NestedMeshes
    :no-members:
+
+   .. rubric:: Attributes
+
+   .. autoproperty:: finest_mesh
+   .. autoproperty:: nodes
+   .. autoproperty:: nodes_latlong
+   .. autoproperty:: num_edges
+   .. autoproperty:: num_faces
+   .. autoproperty:: num_nodes
+   .. autoproperty:: edges
+   .. autoproperty:: faces
 
    .. rubric:: Methods
 
