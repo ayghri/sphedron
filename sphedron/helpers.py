@@ -5,7 +5,7 @@
 # Commercial use requires explicit permission.
 #
 # This software is provided "as is", without warranty of any kind.
-
+"""KDTree queries, edge/face utilities for spherical meshes."""
 from typing import List, Tuple
 from numpy.typing import NDArray
 import numpy as np

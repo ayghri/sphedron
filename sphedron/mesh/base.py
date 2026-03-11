@@ -1,7 +1,11 @@
-"""
-Define the base Mesh class on which the other classes are based
-"""
-
+# License: Non-Commercial Use Only
+#
+# Permission is granted to use, copy, modify, and distribute this software
+# for non-commercial purposes only, with attribution to the original author.
+# Commercial use requires explicit permission.
+#
+# This software is provided "as is", without warranty of any kind.
+"""Define the base Mesh class on which the other classes are based."""
 from typing import Tuple
 from numpy.typing import NDArray
 import numpy as np
@@ -392,7 +396,8 @@ class NodesOnlyMesh(Mesh):
 class TriangularMesh(Mesh):
     """Base class for meshes with triangular faces.
 
-    Provides triangle-based refinement via :func:`sphedron.refine.refine_triangles`.
+    Provides triangle-based refinement via
+    :func:`sphedron.refine.refine_triangles`.
     """
 
     @staticmethod
@@ -423,18 +428,19 @@ class TriangularMesh(Mesh):
         return faces
 
     def triangle2face_index(self, triangle_idx):
-        """Convert triangle index to face index (identity for triangular meshes)."""
+        """Triangle-to-face index (identity for triangular)."""
         return triangle_idx
 
     def face2triangle_index(self, face_idx):
-        """Convert face index to triangle index (identity for triangular meshes)."""
+        """Face-to-triangle index (identity for triangular)."""
         return face_idx
 
 
 class RectangularMesh(Mesh):
     """Base class for meshes with rectangular (quad) faces.
 
-    Provides rectangle-based refinement via :func:`sphedron.refine.refine_rectrangles`.
+    Provides rectangle-based refinement via
+    :func:`sphedron.refine.refine_rectrangles`.
     """
 
     @staticmethod

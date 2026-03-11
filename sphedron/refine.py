@@ -5,7 +5,7 @@
 # Commercial use requires explicit permission.
 #
 # This software is provided "as is", without warranty of any kind.
-
+"""Triangle and rectangle subdivision algorithms for mesh refinement."""
 from typing import Tuple, Literal
 from numpy.typing import NDArray
 import numpy as np

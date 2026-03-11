@@ -5,7 +5,7 @@
 # Commercial use requires explicit permission.
 #
 # This software is provided "as is", without warranty of any kind.
-
+"""Sparse weight construction for transferring fields between meshes."""
 from typing import Tuple
 from numpy.typing import NDArray
 import numpy as np
@@ -159,7 +159,7 @@ def _bilinear_weights(
     quad_verts = sender_mesh.faces[face_indices]  # (M, 4)
     A = sender_mesh.nodes[quad_verts[:, 0]]  # corner 0
     B = sender_mesh.nodes[quad_verts[:, 1]]  # corner 1
-    C = sender_mesh.nodes[quad_verts[:, 2]]  # corner 2
+    _ = sender_mesh.nodes[quad_verts[:, 2]]  # corner 2 (unused)
     D = sender_mesh.nodes[quad_verts[:, 3]]  # corner 3
     P = closest_pts
 
@@ -349,7 +349,7 @@ def _poly_terms(degree: int, dim: int) -> int:
     Equal to ``comb(degree + dim, dim)`` =
     ``(d+1)(d+2)(d+3)/6`` for dim=3.
     """
-    from math import comb
+    from math import comb  # pylint: disable=C0415
     return comb(degree + dim, dim)
 
 
@@ -431,7 +431,9 @@ class MeshTransfer:
         self._nearest_distances = None
 
     def __repr__(self) -> str:
-        s = f"MeshTransfer({self.sender.num_nodes:,} \u2192 {self.receiver.num_nodes:,}"
+        n_s = f"{self.sender.num_nodes:,}"
+        n_r = f"{self.receiver.num_nodes:,}"
+        s = f"MeshTransfer({n_s} -> {n_r}"
         s += f", method='{self.method}', k={self.k}"
         if self.method == "local_rbf":
             s += f", kernel='{self.kernel}', degree={self.degree}"

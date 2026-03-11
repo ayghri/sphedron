@@ -103,6 +103,7 @@ disable=R,
         map-builtin-not-iterating,
         misplaced-comparison-constant,
         missing-function-docstring,
+        missing-module-docstring,
         metaclass-assignment,
         next-method-called,
         next-method-defined,
@@ -173,7 +174,7 @@ evaluation=10.0 - ((float(5 * error + warning + refactor + convention) / stateme
 [BASIC]
 
 # Good variable names which should always be accepted, separated by a comma
-good-names=main,_
+good-names=main,_,i,j,k,n,x,y,q,w,A,B,C,D,M,N,P,W,X,XX,Phi,Phi_sub,P_sub,X_c,M_s,P0
 
 # Bad variable names which should always be refused, separated by a comma
 bad-names=

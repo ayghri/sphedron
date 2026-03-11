@@ -1,3 +1,11 @@
+# License: Non-Commercial Use Only
+#
+# Permission is granted to use, copy, modify, and distribute this software
+# for non-commercial purposes only, with attribution to the original author.
+# Commercial use requires explicit permission.
+#
+# This software is provided "as is", without warranty of any kind.
+"""Hierarchical nested mesh structures at multiple refinement levels."""
 from typing import List, Type
 from numpy.typing import NDArray
 import numpy as np
@@ -161,6 +169,6 @@ class NestedOctaspheres(NestedMeshes):
 
 
 class NestedIcospheres(NestedMeshes):
-    """Nested icospheres, where each level is a refined version of the previous."""
+    """Nested icospheres, refined version of the previous."""
 
     _base_mesh_cls = Icosphere

@@ -1,7 +1,11 @@
 # License: Non-Commercial Use Only
-"""
-Reference geometry constants for base polyhedra used in mesh generation.
-"""
+#
+# Permission is granted to use, copy, modify, and distribute this software
+# for non-commercial purposes only, with attribution to the original author.
+# Commercial use requires explicit permission.
+#
+# This software is provided "as is", without warranty of any kind.
+"""Reference geometry constants for base polyhedra."""
 
 import numpy as np
 

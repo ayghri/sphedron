@@ -1,7 +1,11 @@
-"""
-We define here various meshes based on triangular and rectangular refinement.
-"""
-
+# License: Non-Commercial Use Only
+#
+# Permission is granted to use, copy, modify, and distribute this software
+# for non-commercial purposes only, with attribution to the original author.
+# Commercial use requires explicit permission.
+#
+# This software is provided "as is", without warranty of any kind.
+"""Refinable mesh classes: icosphere, octasphere, cubesphere, uniform."""
 from typing import Tuple, Optional
 from numpy.typing import NDArray
 import numpy as np

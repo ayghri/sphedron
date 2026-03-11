@@ -5,7 +5,7 @@
 # Commercial use requires explicit permission.
 #
 # This software is provided "as is", without warranty of any kind.
-
+"""Coordinate conversions between Cartesian, lat/lon, and theta/phi."""
 from typing import List
 from numpy.typing import NDArray
 import numpy as np
