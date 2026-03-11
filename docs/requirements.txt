@@ -1,0 +1,11 @@
+# Docs-only dependencies (ReadTheDocs / local Sphinx builds)
+Sphinx>=7.0
+pydata-sphinx-theme>=0.16
+nbsphinx>=0.9
+
+ipython
+nbformat
+nbconvert
+
+# If you want notebooks that generate plots during execution
+matplotlib

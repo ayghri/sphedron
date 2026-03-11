@@ -1,0 +1,30 @@
+/* Collapsible code cells for nbsphinx notebooks */
+.nbinput details {
+    margin: 0;
+}
+
+.nbinput summary {
+    cursor: pointer;
+    padding: 4px 8px;
+    background: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    font-size: 0.85em;
+    color: #555;
+    user-select: none;
+}
+
+.nbinput summary:hover {
+    background: #e0e0e0;
+}
+
+
+.wy-side-nav-search .logo {
+    max-width: 150px !important;
+    width: auto !important;
+}
+
+/* Fix RTD theme making dl.py.property inline-block when nested inside a class dl */
+dl.py.property {
+    display: block !important;
+}

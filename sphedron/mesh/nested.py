@@ -1,13 +1,3 @@
-"""
-License: Non-Commercial Use Only
-
-Permission is granted to use, copy, modify, and distribute this software
-for non-commercial purposes only, with attribution to the original author.
-Commercial use requires explicit permission.
-
-This software is provided "as is", without warranty of any kind.
-"""
-
 from typing import List, Type
 from numpy.typing import NDArray
 import numpy as np
@@ -16,13 +6,30 @@ from .base import Mesh
 from .refinables import Icosphere, Cubesphere, Octasphere
 
 
-class NestedMeshes(Mesh):
-    """
-    A manager for a hierarchy of meshes, where each mesh is a refinement
-    of the previous one.
+class NestedMeshes:
+    """A manager for a hierarchy of meshes at increasing refinement levels.
 
-    This class composes multiple Mesh objects rather than inheriting from Mesh,
-    providing a clearer and more robust API.
+    Composes multiple :class:`Mesh` objects.  Individual levels are
+    accessible via indexing (``nested[i]``), and convenience properties
+    aggregate nodes, edges, and faces across the hierarchy.
+
+    Args:
+        factors: List of refinement factors. Each entry refines the
+            previous level by that factor. The cumulative product gives
+            the effective depth at each level.
+        refine_by_angle: Use angle-based (geodesic) interpolation during
+            refinement.
+        rotate: Rotate the base mesh using the class rotation parameters.
+
+    Attributes:
+        finest_mesh (Mesh): The mesh at the highest refinement level.
+        nodes (NDArray): Nodes of the finest mesh, shape ``(N, 3)``.
+        nodes_latlong (NDArray): Finest mesh nodes in ``(lat, lon)`` degrees.
+        num_edges (int): Total edge count across all levels.
+        num_faces (int): Total face count across all levels.
+        num_nodes (int): Node count of the finest mesh.
+        edges (NDArray): All edges from every level, concatenated.
+        faces (NDArray): All faces from every level, concatenated.
     """
 
     _base_mesh_cls: Type[Mesh] = Mesh
@@ -47,7 +54,6 @@ class NestedMeshes(Mesh):
         nodes, faces = mesh0._all_nodes, mesh0._all_faces
 
         for factor in factors:
-            # Create a new mesh by refining the previous one
             mesh = self._base_mesh_cls.from_graph(
                 nodes,
                 faces,
@@ -56,7 +62,6 @@ class NestedMeshes(Mesh):
             )
             self.meshes.append(mesh)
             nodes, faces = mesh._all_nodes, mesh._all_faces
-        super().__init__(nodes, faces)
 
     def __getitem__(self, level: int) -> Mesh:
         """Get the mesh at a specific refinement level."""
@@ -65,6 +70,13 @@ class NestedMeshes(Mesh):
     def __len__(self) -> int:
         """Return the number of refinement levels."""
         return len(self.meshes)
+
+    def __repr__(self) -> str:
+        return (
+            f"NestedMeshes with {len(self.meshes)} levels\n"
+            f"  factors: {self.metadata['factors']}\n"
+            f"  #nodes (finest): {self.num_nodes}\n"
+        )
 
     @property
     def finest_mesh(self) -> Mesh:
@@ -77,8 +89,9 @@ class NestedMeshes(Mesh):
             mesh.reset()
 
     def mask_nodes(self, nodes_mask: NDArray[np.bool_]):
-        """
-        Applies a mask to the finest mesh and propagates the masking
+        """Apply a mask to nodes, propagating to all refinement levels.
+
+        Applies the mask to the finest mesh and propagates the masking
         effect to coarser meshes where applicable.
         """
         if nodes_mask.shape[0] != self.num_nodes:
@@ -92,27 +105,56 @@ class NestedMeshes(Mesh):
 
     @property
     def nodes(self):
+        """Nodes of the finest (most refined) mesh."""
         return self.meshes[-1].nodes
 
     @property
+    def nodes_latlong(self):
+        """Nodes of the finest mesh in latitude/longitude format (degrees)."""
+        return self.meshes[-1].nodes_latlong
+
+    @property
     def num_edges(self):
-        return sum((mesh.num_edges for mesh in self.meshes))
+        """Total number of edges across all refinement levels."""
+        return sum(mesh.num_edges for mesh in self.meshes)
 
     @property
     def num_faces(self):
-        return sum((mesh.num_faces for mesh in self.meshes))
+        """Total number of faces across all refinement levels."""
+        return sum(mesh.num_faces for mesh in self.meshes)
 
     @property
     def num_nodes(self):
+        """Number of nodes in the finest mesh."""
         return self.meshes[-1].num_nodes
 
     @property
     def edges(self) -> NDArray[np.int_]:
+        """All edges from every refinement level, concatenated."""
         return np.concatenate([mesh.edges for mesh in self.meshes], axis=0)
 
     @property
     def faces(self) -> NDArray[np.int_]:
+        """All faces from every refinement level, concatenated."""
         return np.concatenate([mesh.faces for mesh in self.meshes], axis=0)
+
+    def build_trimesh(self):
+        """Build a Trimesh from the finest mesh."""
+        return self.finest_mesh.build_trimesh()
+
+    def query_edges_from_faces(self, receiver_mesh) -> NDArray:
+        """Delegate face-based edge query to the finest mesh."""
+        return self.finest_mesh.query_edges_from_faces(receiver_mesh)
+
+    def query_edges_from_radius(self, receiver_mesh, radius: float) -> NDArray:
+        """Delegate radius-based edge query to the finest mesh."""
+        return self.finest_mesh.query_edges_from_radius(receiver_mesh, radius)
+
+    def query_edges_from_neighbors(self, receiver_mesh, n_neighbors) -> NDArray:
+        """Delegate neighbor-based edge query to the finest mesh."""
+        return self.finest_mesh.query_edges_from_neighbors(
+            receiver_mesh, n_neighbors
+        )
 
 
 class NestedCubespheres(NestedMeshes):
@@ -128,4 +170,6 @@ class NestedOctaspheres(NestedMeshes):
 
 
 class NestedIcospheres(NestedMeshes):
+    """Nested icospheres, where each level is a refined version of the previous."""
+
     _base_mesh_cls = Icosphere

@@ -1,7 +1,6 @@
+:orphan:
+
 Mesh Construction
 =================
 
-   
-.. toctree::
-
-   ./icosphere
+See the tutorials on :doc:`./icosphere` and :doc:`./transfer`.

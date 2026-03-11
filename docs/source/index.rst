@@ -1,4 +1,8 @@
-Spherical Polyhedral Meshes
+Sphedron
+========
+
+
+**Polyhedron-based Meshes on the Sphere**
 
 
 .. note::
@@ -10,12 +14,23 @@ Contents
 --------
 
 .. toctree::
-    :caption: Understanding the meshes
+    :caption: Tutorials
 
-    tutorials/meshes
+    tutorials/icosphere
+    tutorials/transfer
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Examples
+
+   notebooks/index
 
 .. toctree::
    :maxdepth: 1
    :caption: Package Reference
 
    modules/meshes
+   modules/transfer
+   modules/transform
+   modules/helpers
+   modules/refine

@@ -1,4 +1,3 @@
-# License: Non-Commercial Use Only
 """
 Define the base Mesh class on which the other classes are based
 """
@@ -24,31 +23,45 @@ classes = [
 class Mesh:
     """Flexible base class for spherical meshes.
 
-    Provides core functionality for:
-      - Node and face storage
-      - Masking of nodes
-      - Cached property computation
+    Provides core functionality for node/face storage, node masking,
+    and cached property computation.
 
-    Creation pattern:
-      - Use from_base() to start from a class-defined base graph.
-      - Use from_graph() to start from provided nodes/faces.
-      Both optionally rotate and refine before constructing the Mesh.
+    Use :meth:`from_base` to start from a class-defined base graph, or
+    :meth:`from_graph` to start from provided nodes/faces.  Both
+    optionally rotate and refine before constructing the Mesh.
 
-    Subclasses must implement:
-      - base() to supply initial nodes and faces
-      - refine() to apply a refinement strategy
+    Subclasses must implement :meth:`base` and :meth:`refine`.
+
+    Args:
+        nodes: Cartesian coordinates of mesh nodes, shape ``(N, 3)``.
+        faces: Face definitions as indices into *nodes*, shape ``(F, K)``
+            where K is 3 for triangles or 4 for rectangles.
 
     Attributes:
-        rotation_axis (str): Axis used for rotations ('x', 'y', or 'z').
-        rotation_angle (float): Angle in radians for node rotations.
+        rotation_axes (str): Axis used for rotations (``'x'``, ``'y'``,
+            or ``'z'``).
+        rotation_angles (float): Angle in radians for node rotations.
+        edges (NDArray): Directed edges of the mesh, shape ``(E, 2)``.
+        edges_symmetric (NDArray): Undirected edges (both directions),
+            shape ``(2E, 2)``.
+        edges_unique (NDArray): Unique directed edges (lower to higher
+            index), shape ``(E_u, 2)``.
+        faces (NDArray): Face indices of retained faces, shape ``(F', K)``.
+        faces_partial (NDArray): Faces including partially masked nodes.
+        nodes (NDArray): Cartesian coordinates of retained nodes,
+            shape ``(N', 3)``.
+        nodes_latlong (NDArray): Retained nodes in ``(latitude, longitude)``
+            degrees, shape ``(N', 2)``.
+        num_edges (int): Number of directed edges.
+        num_faces (int): Number of retained faces.
+        num_nodes (int): Number of retained nodes.
+        triangles (NDArray): Triangulated faces, shape ``(T, 3)``.
     """
 
-    rotation_axis = "y"
-    rotation_angle = 0
+    rotation_axes = "y"
+    rotation_angles = 0
 
     def __init__(self, nodes: NDArray, faces: NDArray):
-        # Enforce explicit construction: require nodes and faces.
-
         self._all_nodes = np.asarray(nodes)
         self._all_faces = np.asarray(faces, dtype=int)
         self._cached_properties = {}
@@ -56,7 +69,52 @@ class Mesh:
         self.meta = {}
 
     def reset(self):
+        """Reset the node mask so all nodes are visible again."""
         self._nodes_to_keep = np.ones(self._all_nodes.shape[0], dtype=bool)
+
+    @classmethod
+    def _build(
+        cls,
+        nodes: NDArray,
+        faces: NDArray,
+        refine_factor: int = 1,
+        refine_by_angle: bool = False,
+        rotate: bool = False,
+    ):
+        """Shared factory pipeline: rotate, refine, construct, set meta.
+
+        Args:
+            nodes: Cartesian coordinates of mesh nodes, shape (N, 3).
+            faces: Face definitions as indices into ``nodes``, shape (F, K).
+            refine_factor: Subdivision factor per edge.
+            refine_by_angle: Use angle-based (geodesic) interpolation.
+            rotate: Rotate nodes using class rotation parameters.
+
+        Returns:
+            A new instance with meta dict populated.
+        """
+        nodes = np.asarray(nodes)
+        faces = np.asarray(faces, dtype=int)
+
+        if rotate:
+            nodes = _transform.rotate_nodes(
+                nodes,
+                axis=cls.rotation_axes,
+                angles=cls.rotation_angles,
+            )
+
+        nodes, faces = cls.refine(
+            nodes,
+            faces,
+            factor=refine_factor,
+            use_angle=refine_by_angle,
+        )
+
+        instance = cls(nodes=nodes, faces=faces)
+        instance.meta["factor"] = refine_factor
+        instance.meta["rotate"] = rotate
+        instance.meta["angle"] = refine_by_angle
+        return instance
 
     @classmethod
     def from_base(
@@ -79,28 +137,7 @@ class Mesh:
             An instance of the class created from the generated nodes and faces.
         """
         nodes, faces = cls.base()
-
-        if rotate:
-            nodes = _transform.rotate_nodes(
-                nodes,
-                axis=cls.rotation_axis,
-                angles=cls.rotation_angle,
-            )
-
-        # Always call _refine to keep behavior consistent with previous API.
-        nodes, faces = cls.refine(
-            nodes,
-            faces,
-            factor=refine_factor,
-            use_angle=refine_by_angle,
-        )
-
-        # Use _construct to avoid subclass __init__ side effects.
-        instance = cls(nodes=nodes, faces=faces)
-        instance.meta["factor"] = refine_factor
-        instance.meta["rotate"] = rotate
-        instance.meta["angle"] = refine_by_angle
-        return instance
+        return cls._build(nodes, faces, refine_factor, refine_by_angle, rotate)
 
     @classmethod
     def from_graph(
@@ -130,35 +167,13 @@ class Mesh:
 
         Example:
             >>> from sphedron.mesh import Icosphere
-            >>> base_nodes, base_faces = Icosphere._base()
+            >>> base_nodes, base_faces = Icosphere.base()
             >>> refined = Icosphere.from_graph(
             ...     base_nodes, base_faces, refine_factor=2
             ... )
             >>> print(refined.num_nodes, refined.num_faces)
         """
-        nodes = np.asarray(nodes)
-        faces = np.asarray(faces, dtype=int)
-
-        if rotate:
-            nodes = _transform.rotate_nodes(
-                nodes,
-                axis=cls.rotation_axis,
-                angles=cls.rotation_angle,
-            )
-
-        # Always call _refine to match semantics of from_base.
-        nodes, faces = cls.refine(
-            nodes,
-            faces,
-            factor=refine_factor,
-            use_angle=refine_by_angle,
-        )
-
-        instance = cls(nodes=nodes, faces=faces)
-        instance.meta["factor"] = refine_factor
-        instance.meta["rotate"] = rotate
-        instance.meta["angle"] = refine_by_angle
-        return instance
+        return cls._build(nodes, faces, refine_factor, refine_by_angle, rotate)
 
     @staticmethod
     def refine(
@@ -168,10 +183,12 @@ class Mesh:
         use_angle=False,
         **kwargs,
     ) -> Tuple[NDArray, NDArray]:
+        """Refine the mesh. Subclasses must override this method."""
         raise NotImplementedError
 
     @staticmethod
     def base() -> Tuple[NDArray, NDArray]:
+        """Return the base (nodes, faces) geometry. Subclasses must override."""
         raise NotImplementedError
 
     def __repr__(self) -> str:
@@ -362,9 +379,15 @@ class Mesh:
 
 
 class NodesOnlyMesh(Mesh):
-    """
-    A "mesh" defined only by a set of nodes. Inherits directly from Mesh
-    as it does not use the refinement creation pattern.
+    """A mesh defined only by a set of nodes, with no real face connectivity.
+
+    This class does not support the refinement creation pattern
+    (``from_base``/``from_graph``).  Use it when you only need node
+    positions on the sphere.
+
+    Args:
+        nodes_latlong: Array of ``(latitude, longitude)`` pairs in degrees,
+            shape ``(N, 2)``.
     """
 
     def __init__(self, nodes_latlong):
@@ -372,34 +395,81 @@ class NodesOnlyMesh(Mesh):
         faces = np.arange(nodes_xyz.shape[0])[:, np.newaxis].repeat(3, axis=1)
         super().__init__(nodes_xyz, faces)
 
+    @staticmethod
+    def refine(nodes, faces, factor, use_angle=False, **kwargs):
+        """Not supported — NodesOnlyMesh has no face connectivity."""
+        raise TypeError("NodesOnlyMesh does not support refinement.")
+
+    @staticmethod
+    def base():
+        """Not supported — NodesOnlyMesh has no base geometry."""
+        raise TypeError("NodesOnlyMesh does not support base geometry.")
+
     def faces2triangles(self, faces: NDArray) -> NDArray:
         return faces
 
 
 class TriangularMesh(Mesh):
-    """Mixin class for meshes with triangular faces."""
+    """Base class for meshes with triangular faces.
+
+    Provides triangle-based refinement via :func:`sphedron.refine.refine_triangles`.
+    """
 
     @staticmethod
     def refine(nodes, faces, factor, use_angle=False, **kwargs):
+        """Refine a triangular mesh by subdividing each face.
+
+        Args:
+            nodes: Node coordinates, shape (N, 3).
+            faces: Triangular face indices, shape (F, 3).
+            factor: Subdivision factor per edge.
+            use_angle: Use angle-based (geodesic) interpolation.
+
+        Returns:
+            Tuple of (refined_nodes, refined_faces).
+        """
         faces = np.asarray(faces)
         assert faces.shape[1] == 3
         return _refine.refine_triangles(
             nodes,
             faces,
             factor=factor,
-            angle=use_angle,
+            use_angle=use_angle,
             **kwargs,
         )
 
     def faces2triangles(self, faces: NDArray) -> NDArray:
+        """Triangles are the faces themselves for triangular meshes."""
         return faces
+
+    def triangle2face_index(self, triangle_idx):
+        """Convert triangle index to face index (identity for triangular meshes)."""
+        return triangle_idx
+
+    def face2triangle_index(self, face_idx):
+        """Convert face index to triangle index (identity for triangular meshes)."""
+        return face_idx
 
 
 class RectangularMesh(Mesh):
-    """Mixin class for meshes with rectangular faces."""
+    """Base class for meshes with rectangular (quad) faces.
+
+    Provides rectangle-based refinement via :func:`sphedron.refine.refine_rectrangles`.
+    """
 
     @staticmethod
     def refine(nodes, faces, factor, use_angle=False, **kwargs):
+        """Refine a rectangular mesh by subdividing each face.
+
+        Args:
+            nodes: Node coordinates, shape (N, 3).
+            faces: Rectangular face indices, shape (F, 4).
+            factor: Subdivision factor per edge.
+            use_angle: Use angle-based (geodesic) interpolation.
+
+        Returns:
+            Tuple of (refined_nodes, refined_faces).
+        """
         faces = np.asarray(faces)
         assert faces.shape[1] == 4
 
@@ -408,6 +478,20 @@ class RectangularMesh(Mesh):
         )
 
     def faces2triangles(self, faces: NDArray) -> NDArray:
+        """Split each rectangle into two triangles."""
         if faces.ndim != 2 or faces.shape[1] != 4:
             return np.empty((0, 3), dtype=faces.dtype)
         return np.vstack((faces[:, [0, 1, 2]], faces[:, [2, 3, 0]]))
+
+    def triangle2face_index(self, triangle_idx):
+        """Convert triangle index to face index.
+
+        ``faces2triangles`` stacks ``faces[:, [0,1,2]]`` then
+        ``faces[:, [2,3,0]]``, so triangle *i* maps to face
+        ``i % num_faces``.
+        """
+        return np.asarray(triangle_idx) % self.num_faces
+
+    def face2triangle_index(self, face_idx):
+        """Convert face index to its first triangle index."""
+        return np.asarray(face_idx)
